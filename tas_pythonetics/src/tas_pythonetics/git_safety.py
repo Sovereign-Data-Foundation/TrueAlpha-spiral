@@ -79,6 +79,10 @@ class GitActionGuard:
         if not tokens:
             return False
 
+        if tokens[0].lower() != "git":
+            logger.warning(f"BLOCKED: Non-git command '{command}'")
+            return False
+
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
