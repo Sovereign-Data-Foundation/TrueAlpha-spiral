@@ -45,6 +45,13 @@ def test_guard_allows_safe_operations():
     assert guard.authorize_command("git commit -m 'fix'") is True
     assert guard.authorize_command("git push origin feature-branch") is True
 
+def test_guard_blocks_non_git_commands():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("rm -rf /") is False
+    assert guard.authorize_command("echo hello") is False
+    assert guard.authorize_command("./malicious_script.sh") is False
+
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
     monitor.get_current_branch = MagicMock(return_value="feature-branch")

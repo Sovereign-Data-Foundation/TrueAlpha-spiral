@@ -79,6 +79,11 @@ class GitActionGuard:
         if not tokens:
             return False
 
+        import os
+        if os.path.basename(tokens[0]).lower() not in ("git", "git.exe"):
+            logger.warning(f"BLOCKED: Non-git command '{command}'")
+            return False
+
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
