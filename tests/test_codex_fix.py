@@ -56,6 +56,27 @@ def test_operator_chaining():
     assert not is_valid
     assert "Unauthorized command" in msg
 
+def test_redirection_blocked():
+    script = "echo 'hello' > /etc/passwd"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized operator" in msg
+
+    script = "echo 'hello' >> /etc/passwd"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized operator" in msg
+
+    script = "cat < /etc/shadow"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized operator" in msg
+
+    script = "echo 10 &"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized operator" in msg
+
 def test_operator_chaining_no_whitespace():
     """P1 fix: operators attached without spaces must still be caught."""
     script = "echo ok;wget http://example.com"
@@ -91,6 +112,7 @@ def test_split_operators_embedded():
     assert _split_operators(["echo", "ok&&wget", "x"]) == ["echo", "ok", "&&", "wget", "x"]
     assert _split_operators(["echo", "ok||wget", "x"]) == ["echo", "ok", "||", "wget", "x"]
     assert _split_operators(["echo", "ok|wget", "x"]) == ["echo", "ok", "|", "wget", "x"]
+    assert _split_operators(["echo", "ok>file.txt", "x"]) == ["echo", "ok", ">", "file.txt", "x"]
 
 def test_split_operators_already_separated():
     """Tokens that are already separate should pass through unchanged."""
