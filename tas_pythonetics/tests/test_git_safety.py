@@ -51,6 +51,12 @@ def test_guard_blocks_non_git_commands():
     assert guard.authorize_command("rm -rf /") is False
     assert guard.authorize_command("echo hello") is False
     assert guard.authorize_command("./malicious_script.sh") is False
+    assert guard.authorize_command("evil/git status") is False
+
+def test_guard_allows_absolute_path():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("/usr/bin/git status") is True
 
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
