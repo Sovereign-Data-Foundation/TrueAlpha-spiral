@@ -80,7 +80,10 @@ class GitActionGuard:
             return False
 
         import os
-        if os.path.basename(tokens[0]).lower() not in ("git", "git.exe"):
+        executable = tokens[0].lower()
+        if executable not in ("git", "git.exe") and not (
+            os.path.isabs(executable) and os.path.basename(executable) in ("git", "git.exe")
+        ):
             logger.warning(f"BLOCKED: Non-git command '{command}'")
             return False
 
