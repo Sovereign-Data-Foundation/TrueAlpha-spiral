@@ -69,3 +69,18 @@ def test_guard_allows_safe_plus_in_other_commands():
 
     # Adding a file with + in name should be allowed
     assert guard.authorize_command("git add +filename.txt") is True
+
+def test_guard_blocks_shell_operators():
+    monitor = GitStateMonitor()
+    monitor.get_current_branch = MagicMock(return_value="feature-branch")
+    guard = GitActionGuard(monitor)
+
+    assert guard.authorize_command("git status; rm -rf /") is False
+    assert guard.authorize_command("git status && rm -rf /") is False
+    assert guard.authorize_command("git status || rm -rf /") is False
+    assert guard.authorize_command("git status | grep foo") is False
+    assert guard.authorize_command("git status\nrm -rf /") is False
+    assert guard.authorize_command("git status & rm -rf /") is False
+    assert guard.authorize_command("git status > out.txt") is False
+    assert guard.authorize_command("git status `whoami`") is False
+    assert guard.authorize_command("git status $(whoami)") is False

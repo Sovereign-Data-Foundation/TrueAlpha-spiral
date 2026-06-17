@@ -70,6 +70,15 @@ class GitActionGuard:
         Check if a command is safe to execute given the current state.
         Uses shlex to properly parse the command line.
         """
+        # Block raw control characters and command substitutions to prevent injection
+        forbidden_raw = set("\n\r\x00`")
+        if any(c in forbidden_raw for c in command):
+            logger.warning(f"BLOCKED: Invalid control characters or backticks in command '{command}'")
+            return False
+        if "$(" in command:
+            logger.warning(f"BLOCKED: Command substitution not allowed '{command}'")
+            return False
+
         try:
             tokens = shlex.split(command)
         except ValueError:
@@ -77,6 +86,21 @@ class GitActionGuard:
             return False
 
         if not tokens:
+            return False
+
+        # We need to robustly find shell operators like `|`, `&`, `;`, `<`, `>`
+        # outside of quotes to prevent command injection bypasses.
+        # shlex.shlex with punctuation_chars=True does exactly this.
+        try:
+            lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+            punct_tokens = list(lexer)
+        except ValueError:
+            logger.warning(f"BLOCKED: Malformed command string '{command}'")
+            return False
+
+        shell_operators = {"|", "&", ";", "<", ">", "||", "&&", ";;", "<<", ">>", "<<<"}
+        if any(token in shell_operators for token in punct_tokens):
+            logger.warning(f"BLOCKED: Shell operators are not allowed '{command}'")
             return False
 
         import os
