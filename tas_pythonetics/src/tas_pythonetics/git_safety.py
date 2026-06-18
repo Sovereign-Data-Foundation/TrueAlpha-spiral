@@ -65,22 +65,24 @@ class GitActionGuard:
     def __init__(self, monitor: GitStateMonitor):
         self.monitor = monitor
 
-    def authorize_command(self, command: str) -> bool:
+    def authorize_command(self, command) -> bool:
         """
         Check if a command is safe to execute given the current state.
-        Uses shlex to properly parse the command line.
+        Uses shlex to properly parse the command line if given a string.
         """
-        try:
-            tokens = shlex.split(command)
-        except ValueError:
-            logger.warning(f"BLOCKED: Malformed command string '{command}'")
-            return False
+        if isinstance(command, str):
+            try:
+                tokens = shlex.split(command)
+            except ValueError:
+                logger.warning(f"BLOCKED: Malformed command string '{command}'")
+                return False
+        else:
+            tokens = list(command)
 
         if not tokens:
             return False
 
-        import os
-        if os.path.basename(tokens[0]).lower() not in ("git", "git.exe"):
+        if tokens[0].lower() not in ("git", "git.exe"):
             logger.warning(f"BLOCKED: Non-git command '{command}'")
             return False
 
@@ -130,8 +132,7 @@ class GitActionGuard:
         """
         Execute a git command only if authorized.
         """
-        cmd_str = " ".join(command)
-        if self.authorize_command(cmd_str):
+        if self.authorize_command(command):
             try:
                 subprocess.run(command, cwd=self.monitor.repo_path, check=True)
                 return True
