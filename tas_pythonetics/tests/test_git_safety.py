@@ -52,6 +52,14 @@ def test_guard_blocks_non_git_commands():
     assert guard.authorize_command("echo hello") is False
     assert guard.authorize_command("./malicious_script.sh") is False
 
+def test_guard_blocks_path_based_git_execution():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("./git status") is False
+    assert guard.authorize_command("/usr/bin/git push origin main") is False
+    assert guard.authorize_command("malicious_dir/git status") is False
+    assert guard.authorize_command("../git commit") is False
+
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
     monitor.get_current_branch = MagicMock(return_value="feature-branch")
