@@ -86,6 +86,11 @@ class GitActionGuard:
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
+        for token in lower_tokens:
+            if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
+                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                return False
+
         # Check for rebase
         if "rebase" in lower_tokens:
             logger.warning(f"BLOCKED: Rebase is not allowed '{command}'")
