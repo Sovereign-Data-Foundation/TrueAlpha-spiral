@@ -14,5 +14,5 @@ payload = {
     "version": "0.1.0",
 }
 # Replace with real TAS_ITL_API endpoint/token
-requests.post("https://tas.itl/anchor", json=payload)
+requests.post("https://tas.itl/anchor", json=payload, timeout=10)
 print("ITL anchor submitted:", payload["hash"])
