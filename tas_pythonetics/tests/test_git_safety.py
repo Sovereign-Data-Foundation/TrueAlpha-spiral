@@ -60,6 +60,13 @@ def test_guard_blocks_path_based_git_execution():
     assert guard.authorize_command("malicious_dir/git status") is False
     assert guard.authorize_command("../git commit") is False
 
+def test_guard_blocks_dangerous_global_options():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git -c core.pager=calc status") is False
+    assert guard.authorize_command("git --exec-path=/tmp status") is False
+    assert guard.authorize_command("git --paginate status") is False
+
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
     monitor.get_current_branch = MagicMock(return_value="feature-branch")
