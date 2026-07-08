@@ -46,6 +46,9 @@ def test_guard_allows_safe_operations():
     assert guard.authorize_command("git push origin feature-branch") is True
     assert guard.authorize_command("git add -p") is True
     assert guard.authorize_command("git diff --no-pager") is True
+    assert guard.authorize_command("git commit -C HEAD") is True
+    assert guard.authorize_command("git diff -c") is True
+    assert guard.authorize_command("git branch -c branch1 branch2") is True
 
 def test_guard_blocks_non_git_commands():
     monitor = GitStateMonitor()
