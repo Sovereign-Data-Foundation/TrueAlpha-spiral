@@ -87,7 +87,12 @@ class GitActionGuard:
         lower_tokens = {t.lower() for t in tokens}
 
         for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
+            # Block global options that can execute code or configure arbitrary settings.
+            # Short flags like -c can have values immediately appended (e.g., -ccore.pager=...)
+            if (token.startswith("-c") and not token.startswith("--")) or \
+               token.startswith("--exec-path") or \
+               token.startswith("--config-env") or \
+               token == "--paginate":
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
