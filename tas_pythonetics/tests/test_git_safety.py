@@ -44,6 +44,11 @@ def test_guard_allows_safe_operations():
     assert guard.authorize_command("git add .") is True
     assert guard.authorize_command("git commit -m 'fix'") is True
     assert guard.authorize_command("git push origin feature-branch") is True
+    assert guard.authorize_command("git add -p") is True
+    assert guard.authorize_command("git diff --no-pager") is True
+    assert guard.authorize_command("git commit -C HEAD") is True
+    assert guard.authorize_command("git diff -c") is True
+    assert guard.authorize_command("git branch -c branch1 branch2") is True
 
 def test_guard_blocks_non_git_commands():
     monitor = GitStateMonitor()
@@ -64,8 +69,10 @@ def test_guard_blocks_dangerous_global_options():
     monitor = GitStateMonitor()
     guard = GitActionGuard(monitor)
     assert guard.authorize_command("git -c core.pager=calc status") is False
+    assert guard.authorize_command("git -ccore.pager=calc status") is False
     assert guard.authorize_command("git --exec-path=/tmp status") is False
     assert guard.authorize_command("git --paginate status") is False
+    assert guard.authorize_command("git --config-env=core.pager=PAGER log") is False
 
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()

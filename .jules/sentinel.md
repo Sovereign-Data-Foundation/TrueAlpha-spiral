@@ -7,3 +7,8 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block global configuration options like `-c core.pager=...` or `--exec-path=...`, allowing command execution via Git even when root commands and destructive arguments were checked.
 **Learning:** Checking for subcommands (like `rebase`) and harmful arguments (like `--force`) is insufficient if the underlying executable (Git) supports configuration injection that overrides executable paths or specifies arbitrary executables for standard operations.
 **Prevention:** Explicitly block configuration-modifying arguments and paths (like `-c`, `--exec-path`, `--paginate`) when wrapping extensible command-line tools.
+
+## 2026-03-31 - [Command Injection via Git Short Flag Concatenation]
+**Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. The `GitActionGuard` blocked the exact token `-c` but failed to block `-c` when its configuration value was appended without spaces (e.g., `-ccore.pager=calc`), allowing bypassing the filter entirely.
+**Learning:** Checking for equality (`== "-c"`) is insufficient for command-line tools like Git where short flags and their values can be concatenated into a single token by the shell parser (`shlex.split`).
+**Prevention:** Use `.startswith("-c")` and combine it with a check to exclude double-dashed long flags (`not token.startswith("--")`) when blocking short-flags that accept immediate values.
