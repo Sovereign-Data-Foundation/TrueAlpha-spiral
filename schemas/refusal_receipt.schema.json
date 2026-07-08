@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdf.local/schemas/refusal_receipt.schema.json",
+  "title": "SDF Refusal Receipt",
+  "type": "object",
+  "required": [
+    "receipt_type",
+    "receipt_id",
+    "origin_id",
+    "action_requested",
+    "action_authorized",
+    "refusal_reason",
+    "failed_invariants",
+    "state_changed",
+    "timestamp_utc",
+    "receipt_hash"
+  ],
+  "properties": {
+    "receipt_type": {"const": "refusal"},
+    "receipt_id": {"type": "string", "pattern": "^sdf-refusal-"},
+    "origin_id": {"type": "string"},
+    "action_requested": {"type": "array", "items": {"type": "string"}},
+    "action_authorized": {"const": false},
+    "refusal_reason": {"type": "string"},
+    "failed_invariants": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "state_changed": {"const": false},
+    "timestamp_utc": {"type": "string"},
+    "receipt_hash": {"type": "string", "pattern": "^sha256:"}
+  },
+  "additionalProperties": true
+}
