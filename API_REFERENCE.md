@@ -39,6 +39,36 @@ Converts continuous Constitutional Energy into discrete actuation intents using 
 - **`assess_state(energy_state)` returns a `MutinyEvent` only. Actuation MUST be enforced by the caller (e.g., Phoenix / gatekeeper middleware).**
 - Output: `MutinyEvent` with `severity` (`NOMINAL` | `FRICTION` | `MUTINY`), `trigger_code`, `energy_spike`, `trigger_message`, `timestamp`, and boolean `is_mutiny`.
 
+
+## Connector Layer
+
+### `ReplitConnector`
+Location: `tas_pythonetics.replit_connector`
+
+Deterministic admission boundary for Replit-originated workspace actions. The
+connector never mutates a workspace directly; it emits an immutable receipt on
+admission and raises a structured `SovereignStructuralViolation` receipt on
+refusal. Refusals engage an irreversible in-memory SentientLock on that
+connector instance so no later payload can continue through the same frozen
+context.
+
+- **`canonical_manifest_hash(manifest: Mapping[str, Any]) -> str`** — Serializes
+  a manifest with sorted keys and compact JSON separators, then returns the
+  SHA-256 digest. This prevents non-deterministic JSON ordering from producing
+  divergent provenance roots.
+- **`character_shannon_entropy(payload: str) -> float`** — Computes
+  character-level Shannon entropy in bits per character.
+- **`structural_density(payload: str) -> float`** — Divides entropy by the square
+  root of the UTF-8 payload footprint, preserving useful short instructions
+  while collapsing repetitive padding and token-loop payloads below the default
+  `0.15` threshold.
+- **`ReplitConnector.verify(payload, manifest, expected_manifest_hash)`** —
+  Admits only when the density gate and canonical manifest hash both pass. On
+  failure, raises `SovereignStructuralViolation` containing a JSON receipt with
+  the Replit connector name, payload hash, manifest hash, expected manifest hash,
+  density, reason, UTC timestamp, and lock state. The first refusal is appended
+  to the connector witness receipts for external ledger persistence.
+
 ## SDF Micro-Kernel Layer
 
 ### `SovereignDataKernel`
