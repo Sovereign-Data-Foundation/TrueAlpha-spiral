@@ -2,6 +2,14 @@
 tas_pythonetics
 Executable grammar for recursive sovereignty within the TAS framework.
 """
+from .replit_connector import (
+    ConnectorReceipt,
+    ReplitConnector,
+    SovereignStructuralViolation,
+    canonical_manifest_hash,
+    character_shannon_entropy,
+    structural_density,
+)
 from .tas_pythonetics import (
     recursive_truth_amplify,
     TAS_recursive_authenticate,
@@ -9,6 +17,12 @@ from .tas_pythonetics import (
     initiate_self_heal,
 )
 __all__ = [
+    "structural_density",
+    "character_shannon_entropy",
+    "canonical_manifest_hash",
+    "SovereignStructuralViolation",
+    "ReplitConnector",
+    "ConnectorReceipt",
     "recursive_truth_amplify",
     "TAS_recursive_authenticate",
     "detect_drift",
