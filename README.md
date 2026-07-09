@@ -23,6 +23,8 @@ The SDF public-utility framing is distributed across four documents, each owning
 | **Singularity context** | [TrueAlpha-singularity.md](./TrueAlpha-singularity.md) | Convergence model, Ethical Hamiltonian, and civic instantiation logic. |
 | **API contract** | [API_REFERENCE.md](./API_REFERENCE.md) | Runtime primitives and the SDF Micro-Kernel interface, with `*(planned; not yet implemented)*` markers where applicable. |
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
+| **Due-process runtime governance** | [docs/specs/due_process_between_input_and_output.md](./docs/specs/due_process_between_input_and_output.md) | Public-law timing principles mapped to TAS/SDF candidate, verification, executable, receipt, and stay states. |
+| **Recursive contextualization** | [docs/specs/truealpha_spiral_recursive_contextualization.md](./docs/specs/truealpha_spiral_recursive_contextualization.md) | First-principles hierarchy from origin and sovereignty through admissibility, receipt, stewardship, and public witness. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
