@@ -111,3 +111,12 @@ def test_operator_chaining_ampersand():
     is_valid, msg = validate_script(script)
     assert not is_valid
     assert "Unauthorized command" in msg
+
+def test_redirection_with_ampersand_allowed():
+    script = "python tas_agent.py --task 'self-test' > audit.log 2>&1"
+    is_valid, msg = validate_script(script)
+    assert is_valid, msg
+
+    script = "python tas_agent.py --task 'self-test' &> audit.log"
+    is_valid, msg = validate_script(script)
+    assert is_valid, msg
