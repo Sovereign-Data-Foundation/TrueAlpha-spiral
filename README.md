@@ -15,7 +15,7 @@ structured, authenticated, and maintained. TAS/SDF provides that bedrock.
 
 ### Documentation Map
 
-The SDF public-utility framing is distributed across four documents, each owning one layer of concern:
+The SDF public-utility framing is distributed across six documents, each owning one layer of concern:
 
 | Layer | Document | Description |
 |-------|----------|-------------|
@@ -23,6 +23,8 @@ The SDF public-utility framing is distributed across four documents, each owning
 | **Singularity context** | [TrueAlpha-singularity.md](./TrueAlpha-singularity.md) | Convergence model, Ethical Hamiltonian, and civic instantiation logic. |
 | **API contract** | [API_REFERENCE.md](./API_REFERENCE.md) | Runtime primitives and the SDF Micro-Kernel interface, with `*(planned; not yet implemented)*` markers where applicable. |
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
+| **Manifest specification** | [docs/specs/manifest.mdx](./docs/specs/manifest.mdx) | Canonical manifest structure and validation constraints for TAS/SDF artifacts. |
+| **Prime invariant** | [docs/specs/prime-invariant.mdx](./docs/specs/prime-invariant.mdx) | Foundational invariant semantics and deterministic integrity requirements. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
