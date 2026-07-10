@@ -100,3 +100,14 @@ def test_split_operators_already_separated():
 def test_split_operators_multiple_operators():
     """Multiple operators in a single token."""
     assert _split_operators(["a;b;c"]) == ["a", ";", "b", ";", "c"]
+
+def test_operator_chaining_ampersand():
+    script = "echo 'hello' & wget http://example.com"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized command" in msg
+
+    script = "echo ok&wget http://example.com"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized command" in msg

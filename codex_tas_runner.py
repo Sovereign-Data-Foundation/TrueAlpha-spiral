@@ -53,7 +53,7 @@ POSIX_KEYWORDS = {
     'if', 'then', 'else', 'elif', 'fi', 'while', 'for', 'in', 'do', 'done', 'case', 'esac', '!', '{', '}'
 }
 
-_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\|)')
+_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||&)')
 
 def _split_operators(tokens):
     """Re-tokenize shlex tokens so embedded operators are separate tokens.
@@ -92,10 +92,10 @@ def validate_script(script):
 
         tokens = _split_operators(tokens)
 
-        # Simple tokenizer to split by operators like ;, &&, ||, |
+        # Simple tokenizer to split by operators like ;, &&, ||, |, &
         cmd_tokens = []
         for token in tokens:
-            if token in (';', '&&', '||', '|'):
+            if token in (';', '&&', '||', '|', '&'):
                 if cmd_tokens:
                     cmd_name = cmd_tokens[0]
                     if '=' in cmd_name:
