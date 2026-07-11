@@ -12,3 +12,8 @@
 **Vulnerability:** Command injection in `codex_tas_runner.py` via unhandled `&` bash operator. The script validator correctly tokenized and blocked malicious commands separated by `;`, `&&`, `||`, and `|`, but failed to include `&` in the list of command separators, allowing unauthorized commands to bypass the check when executed in the background (e.g., `echo ok & wget http://example.com`).
 **Learning:** When validating bash or POSIX shell commands through tokenization, all control operators that separate commands must be strictly accounted for, including background execution (`&`), not just sequential or logical execution.
 **Prevention:** Ensure the regular expression and tokenizer logic that split commands identify and handle all shell control operators, specifically `&`, alongside `;`, `&&`, `||`, and `|`.
+
+## 2026-07-08 - [Command Injection via Git Config Subcommand]
+**Vulnerability:** Command injection/arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block the `config` subcommand and the `--config` flag, allowing command execution via Git configurations (e.g. `git config core.pager malicious` or `git clone --config core.pager=malicious`).
+**Learning:** Checking for subcommands (like `rebase`) and dangerous global options (like `-c` and `--exec-path`) is insufficient if the underlying executable (Git) supports configuration injection that overrides executable paths or specifies arbitrary executables through other subcommands or flags (like `config` or `--config`).
+**Prevention:** Explicitly block configuration-modifying subcommands (like `config`) and arguments (like `--config`) when wrapping extensible command-line tools.
