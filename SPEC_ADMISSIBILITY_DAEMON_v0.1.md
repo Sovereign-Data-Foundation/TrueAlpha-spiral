@@ -33,3 +33,26 @@ receipt for either outcome.
 
 The daemon records public proof metadata and hashes. It does not require model
 weights, user secrets, private payload content, or internal business logic.
+
+## v0.2 hardening rules
+
+The daemon distinguishes **transport ingress** from **constitutional decisions**.
+Malformed or non-canonical JSON (including duplicate keys or floating-point
+numbers) is rejected before receipt construction and is neither signed nor
+recorded. A well-formed transition that fails an invariant receives a canonical
+refusal receipt.
+
+Authorization is time-bounded: `origin.issued_at`, the evaluation time, and
+`authority.valid_until` must be RFC 3339 timestamps with timezones and satisfy
+`issued_at <= current_time < valid_until` after UTC normalization. The requested
+actions must be permitted by both `authority_scope` and the immutable
+`scope_policy` supplied by the authority snapshot.
+
+Each ledger implementation must consume a replay key atomically. Its key binds
+credential identity, authority epoch, authority checkpoint hash, and origin
+nonce. An identical authorization retry is idempotent; a different
+authorization using the same replay key produces a `CUTOFF`. Parent receipts
+must be canonical-hash verified before an admissible child can be appended.
+Production integrations must additionally inject a trusted gatekeeper-signature
+verifier; a receipt-carried key is never a trust root. A refusal can be recorded without a parent because it does not
+advance the state lineage.

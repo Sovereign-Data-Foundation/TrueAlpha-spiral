@@ -3,7 +3,7 @@ from copy import deepcopy
 from sdf_admissibility_daemon import canonical_json, evaluate_transition, sha256_uri
 
 
-PARENT_HASH = "sha256:previous-valid-state"
+PARENT_HASH = "sha256:genesis"
 
 
 def valid_transition():
@@ -16,6 +16,7 @@ def valid_transition():
             "authority_source": "explicit_user_intent",
             "jurisdiction": "US-TX",
             "timestamp_utc": "2026-07-08T00:00:00Z",
+            "issued_at": "2026-07-08T00:00:00Z",
             "nonce": "unique-replay-resistant-value",
         },
         "authority": {
@@ -31,7 +32,8 @@ def valid_transition():
             ],
             "consent_required": True,
             "revocable": True,
-            "expires_at": "2026-07-09T00:00:00Z",
+            "valid_until": "2026-07-17T00:00:00Z",
+            "scope_policy": ["read_context", "generate_receipt", "refuse_invalid_transition"],
         },
         "lineage": {
             "parent_hash": PARENT_HASH,
@@ -115,3 +117,68 @@ def test_receipt_is_canonical_and_hashable():
     canonical = canonical_json({k: v for k, v in receipt.items() if k != "receipt_hash"})
     assert canonical == canonical_json({k: v for k, v in receipt.items() if k != "receipt_hash"})
     assert receipt["receipt_hash"] == sha256_uri({k: v for k, v in receipt.items() if k != "receipt_hash"})
+
+
+def test_nonce_is_consumed_atomically_and_conflicts_fail_closed():
+    from sdf_admissibility_daemon import AdmissibilityDaemon
+
+    daemon = AdmissibilityDaemon()
+    transition = valid_transition()
+    first = daemon.evaluate(transition, current_time="2026-07-08T01:00:00Z")
+    assert first["admissibility_result"] == "accepted"
+    assert daemon.evaluate(transition, current_time="2026-07-08T01:00:00Z") == first
+
+    conflicting = valid_transition()
+    conflicting["action_requested"] = ["read_context"]
+    cutoff = daemon.evaluate(conflicting, current_time="2026-07-08T01:00:00Z")
+    assert cutoff["admissibility_result"] == "CUTOFF"
+    assert cutoff["cutoff_reason"] == "LINEAGE_OR_REPLAY_INVALID"
+
+
+def test_scope_policy_and_normalized_time_are_enforced():
+    from sdf_admissibility_daemon import AdmissibilityDaemon
+
+    daemon = AdmissibilityDaemon()
+    out_of_scope = valid_transition()
+    out_of_scope["authority"]["scope_policy"] = ["read_context"]
+    receipt = daemon.evaluate(out_of_scope, current_time="2026-07-08T01:00:00Z")
+    assert "scope_authorization" in receipt["failed_invariants"]
+
+    expired = valid_transition()
+    expired["authority"]["valid_until"] = "2026-07-08T00:30:00-01:00"
+    receipt = daemon.evaluate(expired, current_time="2026-07-08T01:31:00Z")
+    assert "authority_match" in receipt["failed_invariants"]
+
+
+def test_raw_ingress_rejects_duplicate_keys_and_all_floats_without_receipt():
+    from sdf_admissibility_daemon import AdmissibilityDaemon
+
+    daemon = AdmissibilityDaemon()
+    assert daemon.evaluate_raw(b'{"origin":{},"origin":{}}') is None
+    assert daemon.evaluate_raw(b'{"value":3.0}') is None
+
+
+def test_child_requires_an_authenticated_parent_receipt():
+    from sdf_admissibility_daemon import AdmissibilityDaemon
+
+    daemon = AdmissibilityDaemon()
+    parent = daemon.evaluate(valid_transition(), current_time="2026-07-08T01:00:00Z")
+    child = valid_transition()
+    child["receipt_id"] = "sdf-exec-test000002"
+    child["origin"]["nonce"] = "second-replay-resistant-value"
+    child["lineage"]["parent_hash"] = parent["receipt_hash"]
+    child["expected_parent_hash"] = parent["receipt_hash"]
+    assert daemon.evaluate(child, current_time="2026-07-08T01:00:00Z")["admissibility_result"] == "accepted"
+
+
+def test_parent_verifier_can_require_an_external_trust_root():
+    from sdf_admissibility_daemon import AdmissibilityDaemon
+
+    daemon = AdmissibilityDaemon(parent_verifier=lambda _hash, _receipt: False)
+    parent = daemon.evaluate(valid_transition(), current_time="2026-07-08T01:00:00Z")
+    child = valid_transition()
+    child["origin"]["nonce"] = "externally-untrusted-parent"
+    child["lineage"]["parent_hash"] = parent["receipt_hash"]
+    child["expected_parent_hash"] = parent["receipt_hash"]
+    refusal = daemon.evaluate(child, current_time="2026-07-08T01:00:00Z")
+    assert "lineage_continuity" in refusal["failed_invariants"]
