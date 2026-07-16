@@ -33,3 +33,43 @@ receipt for either outcome.
 
 The daemon records public proof metadata and hashes. It does not require model
 weights, user secrets, private payload content, or internal business logic.
+
+## v0.2 hardening rules
+
+The daemon distinguishes **transport ingress** from **constitutional decisions**.
+Malformed or non-canonical JSON (including duplicate keys or floating-point
+numbers) is rejected before receipt construction and is neither signed nor
+recorded. A well-formed transition that fails an invariant receives a canonical
+refusal receipt.
+
+Authorization is time-bounded: `origin.issued_at`, the evaluation time, and
+`authority.valid_until` must be RFC 3339 timestamps with timezones and satisfy
+`issued_at <= current_time < valid_until` after UTC normalization. The requested
+actions must be permitted by both `authority_scope` and the immutable
+`scope_policy` supplied by the authority snapshot.
+
+Each ledger implementation must consume a replay key atomically. Its key binds
+credential identity, authority epoch, authority checkpoint hash, and origin
+nonce. An identical authorization retry is idempotent; a different
+authorization using the same replay key produces a `CUTOFF`. Parent receipts
+must be canonical-hash verified before an admissible child can be appended.
+Production integrations must additionally inject a trusted gatekeeper-signature
+verifier; a receipt-carried key is never a trust root. A refusal can be recorded without a parent because it does not
+advance the state lineage.
+
+## v0.3 authenticated authority and two-head ledger
+
+A transition cannot supply its own authority. The daemon resolves an immutable
+`AuthoritySnapshot` from `(credential_id, authority_epoch,
+authority_checkpoint_hash)`, verifies a domain-separated authorization message
+with the snapshot key, and resolves operation permission through the snapshot's
+`scope_policy_hash`. The envelope's authority fields are evidence references,
+not an authorization source.
+
+The ledger maintains independent histories. Every durable decision advances the
+evidence head. Only an `ADMITTED` decision advances the state head, and its
+expected parent must compare equal to the current state head within the same
+transaction. A `REFUSED` decision is evidentiary only and can never be used as
+a state parent. A production adapter uses SQLite WAL and `BEGIN IMMEDIATE` to
+make replay-key uniqueness, head comparison, receipt insertion, and head
+updates one transaction.
