@@ -56,3 +56,20 @@ must be canonical-hash verified before an admissible child can be appended.
 Production integrations must additionally inject a trusted gatekeeper-signature
 verifier; a receipt-carried key is never a trust root. A refusal can be recorded without a parent because it does not
 advance the state lineage.
+
+## v0.3 authenticated authority and two-head ledger
+
+A transition cannot supply its own authority. The daemon resolves an immutable
+`AuthoritySnapshot` from `(credential_id, authority_epoch,
+authority_checkpoint_hash)`, verifies a domain-separated authorization message
+with the snapshot key, and resolves operation permission through the snapshot's
+`scope_policy_hash`. The envelope's authority fields are evidence references,
+not an authorization source.
+
+The ledger maintains independent histories. Every durable decision advances the
+evidence head. Only an `ADMITTED` decision advances the state head, and its
+expected parent must compare equal to the current state head within the same
+transaction. A `REFUSED` decision is evidentiary only and can never be used as
+a state parent. A production adapter uses SQLite WAL and `BEGIN IMMEDIATE` to
+make replay-key uniqueness, head comparison, receipt insertion, and head
+updates one transaction.
