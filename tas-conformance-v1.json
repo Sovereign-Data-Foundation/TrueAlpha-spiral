@@ -1,0 +1,17 @@
+{
+  "suite_id": "tas-conformance-v1",
+  "vector_format_version": 1,
+  "protocol_version": "tas-v1",
+  "canonicalization": "RFC8785-JCS",
+  "signature_algorithm": "Ed25519",
+  "signature_specification": "RFC8032",
+  "vectors": [
+    "tas-v1-ed25519-valid-001",
+    "tas-v1-ed25519-invalid-altered-message-001",
+    "tas-v1-ed25519-invalid-wrong-domain-001",
+    "tas-v1-ed25519-invalid-wrong-public-key-001",
+    "tas-v1-ed25519-invalid-truncated-signature-001",
+    "tas-v1-ed25519-invalid-noncanonical-json-001"
+  ],
+  "suite_sha256": "PENDING_PUBLICATION"
+}
