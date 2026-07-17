@@ -1,117 +1,99 @@
-from copy import deepcopy
+from pathlib import Path
 
-from sdf_admissibility_daemon import canonical_json, evaluate_transition, sha256_uri
-
-
-PARENT_HASH = "sha256:previous-valid-state"
-
-
-def valid_transition():
-    return {
-        "receipt_id": "sdf-exec-test000001",
-        "timestamp_utc": "2026-07-08T00:00:00Z",
-        "origin": {
-            "origin_id": "human_api_key_001",
-            "origin_type": "human",
-            "authority_source": "explicit_user_intent",
-            "jurisdiction": "US-TX",
-            "timestamp_utc": "2026-07-08T00:00:00Z",
-            "nonce": "unique-replay-resistant-value",
-        },
-        "authority": {
-            "authority_scope": [
-                "read_context",
-                "generate_receipt",
-                "refuse_invalid_transition",
-            ],
-            "denied_capabilities": [
-                "modify_private_state_without_consent",
-                "execute_external_tool_without_receipt",
-                "suppress_refusal_reason",
-            ],
-            "consent_required": True,
-            "revocable": True,
-            "expires_at": "2026-07-09T00:00:00Z",
-        },
-        "lineage": {
-            "parent_hash": PARENT_HASH,
-            "lineage_hash": "sha256:current-transition-lineage",
-            "genesis_hash": "sha256:root-anchor",
-            "app_hash": "sha256:canonical-app-state",
-            "receipt_chain_id": "sdf-logos-chain-001",
-        },
-        "expected_parent_hash": PARENT_HASH,
-        "consent": {"granted": True},
-        "privacy": {
-            "substance_retention": "sovereign",
-            "proof_surface": "public",
-            "private_payload_storage": False,
-            "hash_private_payload": True,
-            "reveal_private_content": False,
-            "audit_without_extraction": True,
-        },
-        "action_requested": ["read_context", "generate_receipt"],
-        "tools_invoked": [],
-    }
+from sdf_admissibility_daemon import (
+    AdmissibilityDaemon, AuthoritySnapshot, SQLiteDecisionLedger, sha256_uri,
+)
 
 
-def test_accepts_valid_origin_authority_lineage():
-    receipt = evaluate_transition(valid_transition())
-    assert receipt["receipt_type"] == "execution"
-    assert receipt["admissibility_result"] == "accepted"
-    assert receipt["action_authorized"] is True
-    assert receipt["failed_invariants"] == []
+class Authority:
+    def __init__(self, snapshot): self.snapshot = snapshot
+    def resolve(self, **_): return self.snapshot
+class Signatures:
+    def verify(self, **kwargs): return kwargs["signature"] == b"valid"
+class Scope:
+    def permits(self, **kwargs): return kwargs["requested_operation"] == "read"
+class Parents:
+    def verify(self, **_): return True
+class Signer:
+    def sign(self, message): return {"node_id": "test-node", "signature": sha256_uri(message.hex())}
 
 
-def test_refuses_missing_authority():
-    transition = valid_transition()
-    transition["receipt_id"] = "sdf-refusal-test000001"
-    transition["authority"]["authority_scope"] = ["read_context"]
-    receipt = evaluate_transition(transition)
-    assert receipt["receipt_type"] == "refusal"
-    assert "authority_match" in receipt["failed_invariants"]
+def envelope(**changes):
+    value = {"credential_id":"steward-1", "authority_epoch":7, "authority_checkpoint_hash":"sha256:checkpoint", "issued_at":"2026-07-08T00:00:00Z", "nonce":"nonce-1", "requested_operation":"read", "candidate_hash":"sha256:candidate", "expected_state_parent_hash":"sha256:genesis"}
+    value.update(changes)
+    return value
 
 
-def test_refuses_broken_parent_hash():
-    transition = valid_transition()
-    transition["receipt_id"] = "sdf-refusal-test000002"
-    transition["lineage"]["parent_hash"] = "sha256:tampered"
-    receipt = evaluate_transition(transition)
-    assert receipt["admissibility_result"] == "refused"
-    assert "lineage_continuity" in receipt["failed_invariants"]
+def signed_envelope(**changes):
+    value = envelope(**changes)
+    value.setdefault("signature", b"valid".hex())
+    return value
 
 
-def test_refuses_missing_consent():
-    transition = valid_transition()
-    transition["receipt_id"] = "sdf-refusal-test000003"
-    transition["consent"] = {"granted": False}
-    receipt = evaluate_transition(transition)
-    assert receipt["action_authorized"] is False
-    assert "consent_validity" in receipt["failed_invariants"]
+def daemon(tmp_path: Path):
+    snapshot = AuthoritySnapshot("steward-1", 7, "sha256:checkpoint", b"key", "2026-07-01T00:00:00Z", "2026-07-17T00:00:00Z", "sha256:scope")
+    return AdmissibilityDaemon(authority_resolver=Authority(snapshot), signature_verifier=Signatures(), scope_resolver=Scope(), ledger=SQLiteDecisionLedger(tmp_path / "ledger.db"), parent_verifier=Parents(), receipt_signer=Signer())
 
 
-def test_emits_refusal_receipt():
-    transition = valid_transition()
-    transition["receipt_id"] = "sdf-refusal-test000004"
-    transition["origin"]["nonce"] = ""
-    receipt = evaluate_transition(transition)
-    assert receipt["receipt_type"] == "refusal"
-    assert receipt["refusal_reason"] == "DENIED_AUTHORIZATION"
-    assert receipt["receipt_hash"].startswith("sha256:")
+def test_authenticated_envelope_advances_both_heads(tmp_path):
+    receipt = daemon(tmp_path).evaluate(signed_envelope(), current_time="2026-07-08T01:00:00Z")
+    assert receipt["decision"] == "ADMITTED"
+    assert (receipt["evidence_sequence"], receipt["state_sequence"]) == (1, 1)
 
 
-def test_never_changes_state_on_refusal():
-    transition = valid_transition()
-    transition["receipt_id"] = "sdf-refusal-test000005"
-    transition["privacy"]["private_payload_storage"] = True
-    before = deepcopy(transition)
-    receipt = evaluate_transition(transition)
-    assert transition == before
-    assert receipt["state_changed"] is False
+def test_refusal_advances_evidence_but_not_state(tmp_path):
+    receipt = daemon(tmp_path).evaluate(signed_envelope(requested_operation="write"), current_time="2026-07-08T01:00:00Z")
+    assert receipt["decision"] == "REFUSED"
+    assert (receipt["evidence_sequence"], receipt["state_sequence"]) == (1, 0)
 
 
-def test_receipt_is_canonical_and_hashable():
-    receipt = evaluate_transition(valid_transition())
-    canonical = canonical_json({k: v for k, v in receipt.items() if k != "receipt_hash"})
-    assert canonical == canonical_json({k: v for k, v in receipt.items() if k != "receipt_hash"})
-    assert receipt["receipt_hash"] == sha256_uri({k: v for k, v in receipt.items() if k != "receipt_hash"})
+def test_replay_is_idempotent_and_equivocation_cuts_off(tmp_path):
+    instance = daemon(tmp_path)
+    first = instance.evaluate(signed_envelope(), current_time="2026-07-08T01:00:00Z")
+    retry = instance.evaluate(signed_envelope(), current_time="2026-07-08T01:00:00Z")
+    assert retry["receipt_hash"] == first["receipt_hash"] and retry["replayed"]
+    cutoff = instance.evaluate(signed_envelope(candidate_hash="sha256:other"), current_time="2026-07-08T01:00:00Z")
+    assert cutoff["admissibility_result"] == "CUTOFF"
+
+
+def test_malformed_raw_transport_is_not_a_receipt(tmp_path):
+    assert daemon(tmp_path).evaluate_raw(b'{"a":1,"a":2}', current_time="2026-07-08T01:00:00Z") is None
+    assert daemon(tmp_path).evaluate_raw(b'{"a":1.0}', current_time="2026-07-08T01:00:00Z") is None
+
+
+def test_state_fork_cuts_off_after_prior_admission(tmp_path):
+    instance = daemon(tmp_path)
+    instance.evaluate(signed_envelope(), current_time="2026-07-08T01:00:00Z")
+    result = instance.evaluate(signed_envelope(nonce="nonce-2"), current_time="2026-07-08T01:00:00Z")
+    assert result["admissibility_result"] == "CUTOFF"
+
+
+def test_invalid_signature_is_evidentiary_refusal_not_state_transition(tmp_path):
+    receipt = daemon(tmp_path).evaluate(
+        signed_envelope(signature="00"), current_time="2026-07-08T01:00:00Z"
+    )
+    assert receipt["decision"] == "REFUSED"
+    assert "signature_validity" in receipt["failed_invariants"]
+    assert receipt["state_sequence"] == 0
+
+
+def test_wal_ledger_recovers_heads_after_restart(tmp_path):
+    first = daemon(tmp_path).evaluate(signed_envelope(), current_time="2026-07-08T01:00:00Z")
+    resumed = daemon(tmp_path).evaluate(
+        signed_envelope(
+            nonce="nonce-after-restart",
+            expected_state_parent_hash=first["state_head_hash"],
+        ),
+        current_time="2026-07-08T01:00:00Z",
+    )
+    assert (resumed["evidence_sequence"], resumed["state_sequence"]) == (2, 2)
+
+
+def test_well_formed_invalid_envelope_is_a_durable_refusal(tmp_path):
+    receipt = daemon(tmp_path).evaluate(
+        {"authority_checkpoint_hash": "sha256:checkpoint"},
+        current_time="2026-07-08T01:00:00Z",
+    )
+    assert receipt["decision"] == "REFUSED"
+    assert receipt["durable_receipt"] is True
+    assert receipt["state_sequence"] == 0
