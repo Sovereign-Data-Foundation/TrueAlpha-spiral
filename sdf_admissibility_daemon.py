@@ -13,6 +13,7 @@ from typing import Any, Mapping, Protocol
 class CanonicalJSONError(ValueError): pass
 class ReplayConflictError(RuntimeError): pass
 class StateForkError(RuntimeError): pass
+class LedgerUnavailableError(RuntimeError): pass
 
 
 def canonical_json(value: Mapping[str, Any]) -> str:
@@ -164,55 +165,228 @@ class SQLiteDecisionLedger:
 
 
 class AdmissibilityDaemon:
-    """Authenticates authority before a transition can advance state lineage."""
-    def __init__(self, *, authority_resolver: AuthorityResolver, signature_verifier: SignatureVerifier,
-                 scope_resolver: ScopePolicyResolver, ledger: DecisionLedger,
-                 parent_verifier: ParentVerifier, receipt_signer: ReceiptSigner) -> None:
-        self.authority_resolver, self.signature_verifier = authority_resolver, signature_verifier
-        self.scope_resolver, self.ledger = scope_resolver, ledger
-        self.parent_verifier, self.receipt_signer = parent_verifier, receipt_signer
+    """Turn a signed authorization envelope into one durable admission decision.
 
-    def evaluate_raw(self, raw: bytes | str, *, current_time: str) -> dict[str, Any] | None:
-        try: envelope = parse_canonical_json(raw)
-        except CanonicalJSONError: return None
+    Authority is resolved from a trusted checkpoint.  Envelope authority fields
+    select the snapshot; they do not grant authority by themselves.
+    """
+
+    _REQUIRED_FIELDS = frozenset({
+        "credential_id", "authority_epoch", "authority_checkpoint_hash",
+        "issued_at", "nonce", "requested_operation", "candidate_hash",
+        "signature", "expected_state_parent_hash",
+    })
+
+    def __init__(
+        self,
+        *,
+        authority_resolver: AuthorityResolver,
+        signature_verifier: SignatureVerifier,
+        scope_resolver: ScopePolicyResolver,
+        ledger: DecisionLedger,
+        parent_verifier: ParentVerifier,
+        receipt_signer: ReceiptSigner,
+    ) -> None:
+        self.authority_resolver = authority_resolver
+        self.signature_verifier = signature_verifier
+        self.scope_resolver = scope_resolver
+        self.ledger = ledger
+        self.parent_verifier = parent_verifier
+        self.receipt_signer = receipt_signer
+
+    def evaluate_raw(
+        self, raw: bytes | str, *, current_time: str
+    ) -> dict[str, Any] | None:
+        """Drop malformed transport without signing or allocating ledger space."""
+        try:
+            envelope = parse_canonical_json(raw)
+        except CanonicalJSONError:
+            return None
         return self.evaluate(envelope, current_time=current_time)
 
-    def evaluate(self, envelope: Mapping[str, Any], *, current_time: str) -> dict[str, Any]:
-        required = {"credential_id", "authority_epoch", "authority_checkpoint_hash", "issued_at", "nonce", "requested_operation", "candidate_hash", "signature", "expected_state_parent_hash"}
-        if not required.issubset(envelope): return self._refusal(envelope, ["envelope_integrity"])
-        snapshot = self.authority_resolver.resolve(credential_id=str(envelope["credential_id"]), authority_epoch=int(envelope["authority_epoch"]), authority_checkpoint_hash=str(envelope["authority_checkpoint_hash"]))
-        if snapshot is None: return self._refusal(envelope, ["authority_match"])
-        failures = self._authenticate(envelope, snapshot, current_time)
-        if envelope["expected_state_parent_hash"] != "sha256:genesis" and not self.parent_verifier.verify(receipt_hash=str(envelope["expected_state_parent_hash"]), authority_checkpoint_hash=snapshot.authority_checkpoint_hash):
-            failures.append("lineage_continuity")
-        receipt = self._receipt(envelope, snapshot, failures)
-        replay_key = sha256_uri({"credential_id": snapshot.credential_id, "authority_epoch": snapshot.authority_epoch, "checkpoint_hash": snapshot.authority_checkpoint_hash, "nonce": envelope["nonce"]})
-        authorization_hash = sha256_uri(envelope)
-        try:
-            result = self.ledger.append_decision_once(replay_key=replay_key, authorization_hash=authorization_hash, receipt_hash=receipt["receipt_hash"], receipt=receipt, expected_state_parent_hash=str(envelope["expected_state_parent_hash"]), advances_state_lineage=not failures)
-        except (ReplayConflictError, StateForkError):
-            return {"admissibility_result": "CUTOFF", "cutoff_reason": "REPLAY_OR_STATE_FORK", "durable_receipt": False}
-        return {**receipt, "durable_receipt": True, "evidence_sequence": result.evidence_sequence, "evidence_head_hash": result.evidence_head_hash, "state_sequence": result.state_sequence, "state_head_hash": result.state_head_hash, "replayed": result.replayed}
+    def evaluate(
+        self, envelope: Mapping[str, Any], *, current_time: str
+    ) -> dict[str, Any]:
+        """Persist an admitted decision or a well-formed refusal.
 
-    def _authenticate(self, envelope: Mapping[str, Any], snapshot: AuthoritySnapshot, current_time: str) -> list[str]:
+        CUTOFF means that durable append could not safely establish replay or
+        state-lineage semantics; callers must not execute in that case.
+        """
+        errors = self._envelope_errors(envelope)
+        if errors:
+            return self._persist_refusal(envelope, errors)
+
+        snapshot = self.authority_resolver.resolve(
+            credential_id=envelope["credential_id"],
+            authority_epoch=envelope["authority_epoch"],
+            authority_checkpoint_hash=envelope["authority_checkpoint_hash"],
+        )
+        if snapshot is None or not self._matches_snapshot(envelope, snapshot):
+            return self._persist_refusal(envelope, ["authority_match"])
+
+        failures = self._authorization_failures(envelope, snapshot, current_time)
+        expected_parent = envelope["expected_state_parent_hash"]
+        if expected_parent != "sha256:genesis" and not self.parent_verifier.verify(
+            receipt_hash=expected_parent,
+            authority_checkpoint_hash=snapshot.authority_checkpoint_hash,
+        ):
+            failures.append("lineage_continuity")
+
+        receipt = self._receipt(envelope, snapshot, failures)
+        return self._append(
+            receipt=receipt,
+            replay_key=self._replay_key(snapshot, envelope["nonce"]),
+            authorization_hash=sha256_uri(envelope),
+            expected_state_parent_hash=expected_parent,
+            advances_state_lineage=not failures,
+        )
+
+    def _envelope_errors(self, envelope: Mapping[str, Any]) -> list[str]:
+        if not self._REQUIRED_FIELDS.issubset(envelope):
+            return ["envelope_integrity"]
+        if (
+            not isinstance(envelope["credential_id"], str)
+            or not isinstance(envelope["authority_epoch"], int)
+            or isinstance(envelope["authority_epoch"], bool)
+            or not isinstance(envelope["authority_checkpoint_hash"], str)
+            or not isinstance(envelope["issued_at"], str)
+            or not isinstance(envelope["nonce"], str)
+            or not envelope["nonce"]
+            or not isinstance(envelope["requested_operation"], str)
+            or not isinstance(envelope["candidate_hash"], str)
+            or not isinstance(envelope["signature"], str)
+            or not isinstance(envelope["expected_state_parent_hash"], str)
+        ):
+            return ["envelope_integrity"]
+        return []
+
+    @staticmethod
+    def _matches_snapshot(
+        envelope: Mapping[str, Any], snapshot: AuthoritySnapshot
+    ) -> bool:
+        return (
+            snapshot.credential_id == envelope["credential_id"]
+            and snapshot.authority_epoch == envelope["authority_epoch"]
+            and snapshot.authority_checkpoint_hash
+            == envelope["authority_checkpoint_hash"]
+        )
+
+    def _authorization_failures(
+        self,
+        envelope: Mapping[str, Any],
+        snapshot: AuthoritySnapshot,
+        current_time: str,
+    ) -> list[str]:
         failures: list[str] = []
         try:
-            now, issued, expires = parse_rfc3339(current_time), parse_rfc3339(str(envelope["issued_at"])), parse_rfc3339(snapshot.valid_until)
-            if snapshot.revoked or not issued <= now < expires or issued < parse_rfc3339(snapshot.valid_from): failures.append("authority_match")
-        except ValueError: failures.append("authority_match")
+            now = parse_rfc3339(current_time)
+            issued_at = parse_rfc3339(envelope["issued_at"])
+            valid_from = parse_rfc3339(snapshot.valid_from)
+            valid_until = parse_rfc3339(snapshot.valid_until)
+            if snapshot.revoked or not valid_from <= issued_at <= now < valid_until:
+                failures.append("authority_match")
+        except (TypeError, ValueError):
+            failures.append("authority_match")
+
         unsigned = {key: value for key, value in envelope.items() if key != "signature"}
-        try: signature = bytes.fromhex(str(envelope["signature"]))
-        except ValueError: signature = b""
-        message = b"SDF-AUTH-V1\0" + canonical_json(unsigned).encode()
-        if not self.signature_verifier.verify(public_key=snapshot.public_key, message=message, signature=signature): failures.append("signature_validity")
-        if not self.scope_resolver.permits(policy_hash=snapshot.scope_policy_hash, requested_operation=str(envelope["requested_operation"]), candidate_hash=str(envelope["candidate_hash"])): failures.append("scope_authorization")
+        try:
+            signature = bytes.fromhex(envelope["signature"])
+        except ValueError:
+            signature = b""
+        message = b"SDF-AUTH-V1\0" + canonical_json(unsigned).encode("utf-8")
+        if not self.signature_verifier.verify(
+            public_key=snapshot.public_key,
+            message=message,
+            signature=signature,
+        ):
+            failures.append("signature_validity")
+
+        if not self.scope_resolver.permits(
+            policy_hash=snapshot.scope_policy_hash,
+            requested_operation=envelope["requested_operation"],
+            candidate_hash=envelope["candidate_hash"],
+        ):
+            failures.append("scope_authorization")
         return failures
 
-    def _refusal(self, envelope: Mapping[str, Any], failures: list[str]) -> dict[str, Any]:
-        return self._receipt(envelope, None, failures)
+    def _persist_refusal(
+        self, envelope: Mapping[str, Any], failures: list[str]
+    ) -> dict[str, Any]:
+        receipt = self._receipt(envelope, None, failures)
+        return self._append(
+            receipt=receipt,
+            replay_key=sha256_uri({"invalid_transition_hash": sha256_uri(envelope)}),
+            authorization_hash=sha256_uri(envelope),
+            expected_state_parent_hash=None,
+            advances_state_lineage=False,
+        )
 
-    def _receipt(self, envelope: Mapping[str, Any], snapshot: AuthoritySnapshot | None, failures: list[str]) -> dict[str, Any]:
-        body = {"transition_hash": sha256_uri(envelope), "authority_checkpoint_hash": snapshot.authority_checkpoint_hash if snapshot else envelope.get("authority_checkpoint_hash"), "expected_state_parent_hash": envelope.get("expected_state_parent_hash"), "decision": "REFUSED" if failures else "ADMITTED", "failed_invariants": failures}
-        signature = dict(self.receipt_signer.sign(b"SDF-RECEIPT-V1\0" + canonical_json(body).encode()))
-        receipt = {**body, "attestation": signature}
+    def _append(
+        self,
+        *,
+        receipt: Mapping[str, Any],
+        replay_key: str,
+        authorization_hash: str,
+        expected_state_parent_hash: str | None,
+        advances_state_lineage: bool,
+    ) -> dict[str, Any]:
+        try:
+            result = self.ledger.append_decision_once(
+                replay_key=replay_key,
+                authorization_hash=authorization_hash,
+                receipt_hash=receipt["receipt_hash"],
+                receipt=receipt,
+                expected_state_parent_hash=expected_state_parent_hash,
+                advances_state_lineage=advances_state_lineage,
+            )
+        except (ReplayConflictError, StateForkError):
+            return {
+                "admissibility_result": "CUTOFF",
+                "cutoff_reason": "REPLAY_OR_STATE_FORK",
+                "durable_receipt": False,
+            }
+        except (LedgerUnavailableError, sqlite3.Error):
+            return {
+                "admissibility_result": "CUTOFF",
+                "cutoff_reason": "LEDGER_UNAVAILABLE",
+                "durable_receipt": False,
+            }
+        return {
+            **receipt,
+            "durable_receipt": True,
+            "evidence_sequence": result.evidence_sequence,
+            "evidence_head_hash": result.evidence_head_hash,
+            "state_sequence": result.state_sequence,
+            "state_head_hash": result.state_head_hash,
+            "replayed": result.replayed,
+        }
+
+    @staticmethod
+    def _replay_key(snapshot: AuthoritySnapshot, nonce: str) -> str:
+        return sha256_uri({
+            "credential_id": snapshot.credential_id,
+            "authority_epoch": snapshot.authority_epoch,
+            "checkpoint_hash": snapshot.authority_checkpoint_hash,
+            "nonce": nonce,
+        })
+
+    def _receipt(
+        self,
+        envelope: Mapping[str, Any],
+        snapshot: AuthoritySnapshot | None,
+        failures: list[str],
+    ) -> dict[str, Any]:
+        body = {
+            "transition_hash": sha256_uri(envelope),
+            "authority_checkpoint_hash": (
+                snapshot.authority_checkpoint_hash
+                if snapshot is not None
+                else envelope.get("authority_checkpoint_hash")
+            ),
+            "expected_state_parent_hash": envelope.get("expected_state_parent_hash"),
+            "decision": "REFUSED" if failures else "ADMITTED",
+            "failed_invariants": failures,
+        }
+        message = b"SDF-RECEIPT-V1\0" + canonical_json(body).encode("utf-8")
+        receipt = {**body, "attestation": dict(self.receipt_signer.sign(message))}
         return {**receipt, "receipt_hash": sha256_uri(receipt)}

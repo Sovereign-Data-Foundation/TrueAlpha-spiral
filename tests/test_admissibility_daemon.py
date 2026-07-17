@@ -87,3 +87,13 @@ def test_wal_ledger_recovers_heads_after_restart(tmp_path):
         current_time="2026-07-08T01:00:00Z",
     )
     assert (resumed["evidence_sequence"], resumed["state_sequence"]) == (2, 2)
+
+
+def test_well_formed_invalid_envelope_is_a_durable_refusal(tmp_path):
+    receipt = daemon(tmp_path).evaluate(
+        {"authority_checkpoint_hash": "sha256:checkpoint"},
+        current_time="2026-07-08T01:00:00Z",
+    )
+    assert receipt["decision"] == "REFUSED"
+    assert receipt["durable_receipt"] is True
+    assert receipt["state_sequence"] == 0
