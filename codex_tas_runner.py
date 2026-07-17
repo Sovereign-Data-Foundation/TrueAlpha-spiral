@@ -53,7 +53,7 @@ POSIX_KEYWORDS = {
     'if', 'then', 'else', 'elif', 'fi', 'while', 'for', 'in', 'do', 'done', 'case', 'esac', '!', '{', '}'
 }
 
-_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||&)')
+_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||(?<![>&])&(?!>))')
 
 def _split_operators(tokens):
     """Re-tokenize shlex tokens so embedded operators are separate tokens.
@@ -75,6 +75,9 @@ def validate_script(script):
 
     if '$(' in script or '`' in script:
         return False, "Subshells are blocked"
+
+    if '<(' in script or '>(' in script:
+        return False, "Process substitution is blocked"
 
     lines = script.splitlines()
     for line in lines:
