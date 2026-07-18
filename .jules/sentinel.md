@@ -17,3 +17,7 @@
 **Vulnerability:** Command injection by process substitution `<(...)` and `>(...)` bypassed the command allowlist because `shlex.split` does not correctly tokenize them as commands.
 **Learning:** `shlex.split` is insufficient to prevent advanced bash syntax like process substitution from executing arbitrary commands.
 **Prevention:** Explicitly reject process substitution syntax `<(` and `>(` before tokenizing with `shlex`.
+## 2026-03-31 - [Process Substitution Command Injection Bypass]
+**Vulnerability:** Command injection by process substitution `<(...)` and `>(...)` bypassed the command allowlist because `shlex.split` does not correctly tokenize them as commands.
+**Learning:** `shlex.split` is insufficient to prevent advanced bash syntax like process substitution from executing arbitrary commands.
+**Prevention:** Explicitly reject process substitution syntax `<(` and `>(` before tokenizing with `shlex`.

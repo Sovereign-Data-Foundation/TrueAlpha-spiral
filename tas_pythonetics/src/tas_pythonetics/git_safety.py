@@ -70,6 +70,10 @@ class GitActionGuard:
         Check if a command is safe to execute given the current state.
         Uses shlex to properly parse the command line.
         """
+        if '<(' in command or '>(' in command:
+            logger.warning(f"BLOCKED: Process substitution syntax not allowed '{command}'")
+            return False
+
         try:
             tokens = shlex.split(command)
         except ValueError:
