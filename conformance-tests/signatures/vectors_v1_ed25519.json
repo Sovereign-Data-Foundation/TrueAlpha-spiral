@@ -79,7 +79,7 @@
     "vector_id": "tas-v1-ed25519-invalid-noncanonical-json-001",
     "base_vector": "tas-v1-ed25519-valid-001",
     "description": "Input JSON is valid but not canonical (extra space). Must be rejected BEFORE signature check.",
-    "raw_input_override_hex": "7b226e6f6e6365223a2034322c2e2e2e7d",
+    "raw_input_override_hex": "7b226e6f6e6365223a2034327d",
     "note": "Represents valid JSON with whitespace. Validator must check JCS compliance first.",
     "expected_result": "REJECT",
     "expected_error": "ERR_NON_CANONICAL_ENCODING",

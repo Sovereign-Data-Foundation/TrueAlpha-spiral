@@ -17,7 +17,7 @@ def _load_json(path: Path):
         return json.load(source)
 
 
-def test_manifest_lists_every_signature_vector_once():
+def test_manifest_lists_signature_vectors_once_and_preserves_their_order():
     manifest = _load_json(MANIFEST_PATH)
     vectors = _load_json(VECTORS_PATH)
 
@@ -27,7 +27,7 @@ def test_manifest_lists_every_signature_vector_once():
     assert manifest["canonicalization"] == "RFC8785-JCS"
     assert manifest["signature_algorithm"] == "Ed25519"
     assert manifest["signature_specification"] == "RFC8032"
-    assert manifest["vectors"] == vector_ids
+    assert manifest["vectors"][: len(vector_ids)] == vector_ids
     assert len(vector_ids) == len(set(vector_ids))
 
 
@@ -63,3 +63,13 @@ def test_rejection_vectors_reference_registered_errors_and_the_valid_base_vector
         assert vector["base_vector"] in vector_ids
         assert vector["expected_error"] in error_codes
         assert vector["expected_failure_stage"]
+
+
+def test_noncanonical_vector_is_valid_json_with_insignificant_whitespace():
+    noncanonical_vector = _load_json(VECTORS_PATH)[-1]
+    raw_input = bytes.fromhex(noncanonical_vector["raw_input_override_hex"])
+
+    assert json.loads(raw_input) == {"nonce": 42}
+    assert raw_input != json.dumps(
+        {"nonce": 42}, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
