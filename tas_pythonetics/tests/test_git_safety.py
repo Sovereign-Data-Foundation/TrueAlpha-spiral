@@ -90,3 +90,5 @@ def test_guard_blocks_process_substitution():
     guard = GitActionGuard(monitor)
     assert guard.authorize_command("git push origin <(echo main)") is False
     assert guard.authorize_command("git add >(tee log.txt)") is False
+    assert guard.authorize_command("git push origin $(echo main)") is False
+    assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
