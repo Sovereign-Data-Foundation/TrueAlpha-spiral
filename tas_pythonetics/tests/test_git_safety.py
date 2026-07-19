@@ -66,6 +66,13 @@ def test_guard_blocks_dangerous_global_options():
     assert guard.authorize_command("git -c core.pager=calc status") is False
     assert guard.authorize_command("git --exec-path=/tmp status") is False
     assert guard.authorize_command("git --paginate status") is False
+    assert guard.authorize_command("git -p status") is False
+
+def test_guard_blocks_config_command():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git config core.pager calc") is False
+    assert guard.authorize_command("git config --global user.name") is False
 
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()

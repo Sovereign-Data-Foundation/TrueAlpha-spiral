@@ -21,3 +21,8 @@
 **Vulnerability:** Command injection by process substitution `<(...)` and `>(...)` bypassed the command allowlist because `shlex.split` does not correctly tokenize them as commands.
 **Learning:** `shlex.split` is insufficient to prevent advanced bash syntax like process substitution from executing arbitrary commands.
 **Prevention:** Explicitly reject process substitution syntax `<(` and `>(` before tokenizing with `shlex`.
+
+## 2024-07-19 - Persistent Command Injection via Git Config and Paginate Option
+**Vulnerability:** GitActionGuard.authorize_command was vulnerable to persistent command injection (RCE) because it did not block `git config` commands or the `-p` (paginate) option, allowing attackers to set and trigger malicious configurations (e.g., `git config core.pager calc` followed by `git -p`).
+**Learning:** Checking for `-c` or `--paginate` is insufficient if their short-hand aliases (`-p`) or persistent setting counterparts (`git config`) are overlooked, leaving a vector for command injection open.
+**Prevention:** Always enumerate and block all aliases for dangerous flags, and restrict state-altering commands like `config` when attempting to sandbox command execution.
