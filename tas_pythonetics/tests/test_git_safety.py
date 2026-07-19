@@ -84,3 +84,11 @@ def test_guard_allows_safe_plus_in_other_commands():
 
     # Adding a file with + in name should be allowed
     assert guard.authorize_command("git add +filename.txt") is True
+
+def test_guard_blocks_process_substitution():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git push origin <(echo main)") is False
+    assert guard.authorize_command("git add >(tee log.txt)") is False
+    assert guard.authorize_command("git push origin $(echo main)") is False
+    assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
