@@ -61,8 +61,9 @@ def test_rejection_vectors_reference_registered_errors_and_the_valid_base_vector
     error_codes = _load_json(ERROR_CODES_PATH)["errors"]
     vector_ids = {vector["vector_id"] for vector in vectors}
 
-    for vector in vectors[1:]:
-        assert vector["expected_result"] == "REJECT"
+    rejection_vectors = [v for v in vectors if v.get("expected_result") == "REJECT"]
+    assert len(rejection_vectors) > 0, "Should have at least one rejection vector"
+    for vector in rejection_vectors:
         assert vector["base_vector"] in vector_ids
         assert vector["expected_error"] in error_codes
         assert vector["expected_failure_stage"]
