@@ -32,7 +32,10 @@ def test_manifest_lists_signature_vectors_once_and_preserves_their_order():
 
 
 def test_valid_vector_has_the_specified_ed25519_byte_lengths_and_preimage():
-    valid_vector = _load_json(VECTORS_PATH)[0]
+    vectors = _load_json(VECTORS_PATH)
+    valid_vectors = [v for v in vectors if v.get("expected_result") == "ACCEPT"]
+    assert len(valid_vectors) == 1, "Should have exactly one valid vector"
+    valid_vector = valid_vectors[0]
 
     header = bytes.fromhex(valid_vector["domain"]["header_hex"])
     canonical_message = bytes.fromhex(valid_vector["expected_canonical_message_hex"])
