@@ -91,9 +91,14 @@ class GitActionGuard:
         lower_tokens = {t.lower() for t in tokens}
 
         for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
+            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token == "-p":
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
+
+        # Check for config
+        if "config" in lower_tokens:
+            logger.warning(f"BLOCKED: config is not allowed '{command}'")
+            return False
 
         # Check for rebase
         if "rebase" in lower_tokens:
