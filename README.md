@@ -15,7 +15,7 @@ structured, authenticated, and maintained. TAS/SDF provides that bedrock.
 
 ### Documentation Map
 
-The SDF public-utility framing is distributed across four documents, each owning one layer of concern:
+The SDF public-utility framing is distributed across six documents, each owning one layer of concern:
 
 | Layer | Document | Description |
 |-------|----------|-------------|
