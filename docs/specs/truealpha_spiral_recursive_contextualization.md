@@ -14,6 +14,22 @@ The central design claim is:
 This document records that recursive identity so TAS/SDF governance artifacts can
 be read from first principle through runtime receipt.
 
+
+## Three-level reading
+
+TrueAlpha-Spiral is clearest when read at three levels:
+
+| Level | Reader question | TAS answer |
+|---|---|---|
+| Public description | What is TAS? | An architecture that combines probabilistic generation with deterministic verification so consequential computational actions can be evaluated against explicit constraints before execution. |
+| Engineering pattern | How is it implemented? | Generator → Candidate State → Deterministic Verification → Admission / Refusal → Receipt → Execution. |
+| Recursive principle | Why does the pattern matter? | Recursive accountability: every state transition answers to prior origin, authority, constraint, verification, receipt, and stewardship. |
+
+This three-level separation keeps TAS grounded as a systems architecture. It does
+not require claims about consciousness, sentience, AGI, political theory, or any
+specific model architecture. Its governing question is not “Can this be
+generated?” but “Can this legitimately execute?”
+
 ## Layer 0 — First Principle
 
 The beginning is not intelligence. The beginning is **origin**.
@@ -106,6 +122,40 @@ The spiral closes on itself without becoming circular:
 The system recursively proves continuity not by asserting authority, but by
 demonstrating lineage.
 
+
+## Engineering pattern and module correspondence
+
+The implementation pattern separates generation from execution:
+
+```text
+Generator
+      ↓
+Candidate State
+      ↓
+Deterministic Verification
+      ↓
+Admission / Refusal
+      ↓
+Receipt
+      ↓
+Execution
+```
+
+Repository and companion-system components fit this pattern as specialized
+modules for provenance, authorization, verification, monitoring, and recovery:
+
+| Component | Architectural role | Pattern position |
+|---|---|---|
+| `wake_chain.py` | Append-only provenance and transition receipts. | Receipt / future-origin evidence. |
+| `capability.py` | Least-authority authorization model. | Authority / constraint. |
+| `uvk.py` | Deterministic admission-control kernel. | Verification / admission. |
+| `stability.py` | Structural health and drift monitoring. | Verification / stewardship. |
+| `phoenix.py` | Freeze, rollback, re-verify, correct, and relaunch recovery controller. | Refusal / containment / recovery. |
+
+The important architectural boundary is that generation and execution are not the
+same phase. Candidate states may be produced freely; executable states require
+provenance, authorization, verification, admissibility, receipt, and stewardship.
+
 ## Recursive identity
 
 ```text
@@ -158,6 +208,23 @@ A government or high-consequence system that skips this boundary collapses
 possibility into authority. TAS/SDF prevents that collapse by requiring each
 consequential transition to demonstrate continuity with the authority from which
 it claims the right to act.
+
+
+## State transition as the fundamental unit
+
+The fundamental unit of TAS governance is not the output. It is the state
+transition. Every consequential transition asks:
+
+- Where did this come from?
+- Who authorized it?
+- What constraints govern it?
+- Was it verified?
+- Is it admissible?
+- Should it execute?
+- What receipt records it?
+
+This shifts the center of gravity from prediction to governance and from
+optimization to admissibility.
 
 ## The True Alpha
 

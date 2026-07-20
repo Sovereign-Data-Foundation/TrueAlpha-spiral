@@ -28,7 +28,12 @@ The SDF public-utility framing is distributed across six documents, each owning 
 
 ## Enforceable AI Integrity via Deterministic Verification
 
-TrueAlphaSpiral (TAS) is an open, neuro-symbolic AI architecture where
+TrueAlphaSpiral (TAS) is an admissibility architecture for high-consequence computation.
+It separates generation from execution by requiring candidate computational states
+to satisfy explicit verification, provenance, authorization, and accountability
+requirements before they become executable.
+
+TAS is also an open, neuro-symbolic AI architecture where
 **probabilistic generation is governed by deterministic verification**.
 
 TAS converts AI edge cases from silent failures into **auditable, provable events**
