@@ -21,3 +21,8 @@
 **Vulnerability:** Command injection by process substitution `<(...)` and `>(...)` bypassed the command allowlist because `shlex.split` does not correctly tokenize them as commands.
 **Learning:** `shlex.split` is insufficient to prevent advanced bash syntax like process substitution from executing arbitrary commands.
 **Prevention:** Explicitly reject process substitution syntax `<(` and `>(` before tokenizing with `shlex`.
+
+## 2026-04-01 - [Command Injection via Git Config Subcommand and Paginate Option]
+**Vulnerability:** Command injection/arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block the `config` subcommand and the `-p` (paginate) global option, which can both be used to specify arbitrary executables that Git will execute (e.g. `core.pager`).
+**Learning:** Even if we block configuration-modifying *arguments* (like `-c`), an attacker can simply use the `config` *subcommand* to persistently change settings (e.g. `git config core.pager "calc"`). Additionally, shorthand global options like `-p` can be as dangerous as their long-form equivalents (like `--paginate`).
+**Prevention:** Block the `config` subcommand outright, and comprehensively block all variants of dangerous global options (including shorthand like `-p`).
