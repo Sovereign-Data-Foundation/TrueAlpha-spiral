@@ -15,7 +15,7 @@ structured, authenticated, and maintained. TAS/SDF provides that bedrock.
 
 ### Documentation Map
 
-The SDF public-utility framing is distributed across four documents, each owning one layer of concern:
+The SDF public-utility framing is distributed across eight documents, each owning one layer of concern:
 
 | Layer | Document | Description |
 |-------|----------|-------------|
@@ -23,10 +23,19 @@ The SDF public-utility framing is distributed across four documents, each owning
 | **Singularity context** | [TrueAlpha-singularity.md](./TrueAlpha-singularity.md) | Convergence model, Ethical Hamiltonian, and civic instantiation logic. |
 | **API contract** | [API_REFERENCE.md](./API_REFERENCE.md) | Runtime primitives and the SDF Micro-Kernel interface, with `*(planned; not yet implemented)*` markers where applicable. |
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
+| **Due-process runtime governance** | [docs/specs/due_process_between_input_and_output.md](./docs/specs/due_process_between_input_and_output.md) | Public-law timing principles mapped to TAS/SDF candidate, verification, executable, receipt, and stay states. |
+| **Recursive contextualization** | [docs/specs/truealpha_spiral_recursive_contextualization.md](./docs/specs/truealpha_spiral_recursive_contextualization.md) | First-principles hierarchy from origin and sovereignty through admissibility, receipt, stewardship, and public witness. |
+| **Civic architecture** | [docs/specs/civic_architecture_and_genesis_mission.md](./docs/specs/civic_architecture_and_genesis_mission.md) | Genesis Mission framing for civic visibility, rights-as-invariants, public witness, and citizen-facing verification readiness. |
+| **Merkle lineage blueprint** | [docs/specs/merkle_lineage_tree_rust_blueprint.md](./docs/specs/merkle_lineage_tree_rust_blueprint.md) | Production Rust blueprint for sub-millisecond Merkle Lineage Tree validation, refusal receipts, and Phoenix rollback. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
-TrueAlphaSpiral (TAS) is an open, neuro-symbolic AI architecture where
+TrueAlphaSpiral (TAS) is an admissibility architecture for high-consequence computation.
+It separates generation from execution by requiring candidate computational states
+to satisfy explicit verification, provenance, authorization, and accountability
+requirements before they become executable.
+
+TAS is also an open, neuro-symbolic AI architecture where
 **probabilistic generation is governed by deterministic verification**.
 
 TAS converts AI edge cases from silent failures into **auditable, provable events**
