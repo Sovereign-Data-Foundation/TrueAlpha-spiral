@@ -15,7 +15,7 @@ structured, authenticated, and maintained. TAS/SDF provides that bedrock.
 
 ### Documentation Map
 
-The SDF public-utility framing is distributed across six documents, each owning one layer of concern:
+The SDF public-utility framing is distributed across seven documents, each owning one layer of concern:
 
 | Layer | Document | Description |
 |-------|----------|-------------|
@@ -25,6 +25,7 @@ The SDF public-utility framing is distributed across six documents, each owning 
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
 | **Due-process runtime governance** | [docs/specs/due_process_between_input_and_output.md](./docs/specs/due_process_between_input_and_output.md) | Public-law timing principles mapped to TAS/SDF candidate, verification, executable, receipt, and stay states. |
 | **Recursive contextualization** | [docs/specs/truealpha_spiral_recursive_contextualization.md](./docs/specs/truealpha_spiral_recursive_contextualization.md) | First-principles hierarchy from origin and sovereignty through admissibility, receipt, stewardship, and public witness. |
+| **Civic architecture** | [docs/specs/civic_architecture_and_genesis_mission.md](./docs/specs/civic_architecture_and_genesis_mission.md) | Genesis Mission framing for civic visibility, rights-as-invariants, public witness, and citizen-facing verification readiness. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
