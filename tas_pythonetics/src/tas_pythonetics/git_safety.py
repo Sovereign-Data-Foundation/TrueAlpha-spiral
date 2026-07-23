@@ -88,12 +88,46 @@ class GitActionGuard:
             return False
 
         # Normalize tokens to lowercase for checking commands/flags
-        lower_tokens = {t.lower() for t in tokens}
+        # Keep a list instead of a set to preserve order for positional checks
+        lower_tokens_list = [t.lower() for t in tokens]
+        lower_tokens = set(lower_tokens_list)
 
+        # Identify the subcommand to safely check it and global options.
+        # We must skip over known global options that take arguments.
+        subcmd_idx = -1
+        skip_next = False
+        for i, token in enumerate(lower_tokens_list[1:], start=1):
+            if skip_next:
+                skip_next = False
+                continue
+
+            # Global options taking an argument as a separate token
+            if token in ("-c", "--exec-path", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--list-cmds", "--attr-source"):
+                skip_next = True
+                continue
+
+            if not token.startswith("-"):
+                subcmd_idx = i
+                break
+
+        # Check for global options before the subcommand
+        global_options = lower_tokens_list[1:subcmd_idx] if subcmd_idx != -1 else lower_tokens_list[1:]
+
+        # Block -p if it's used as a global option (--paginate alias)
+        if "-p" in global_options:
+            logger.warning(f"BLOCKED: Dangerous global option '-p'")
+            return False
+
+        # Block these options anywhere in the command
         for token in lower_tokens:
             if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                logger.warning(f"BLOCKED: Dangerous option '{token}'")
                 return False
+
+        # Block config subcommand
+        if subcmd_idx != -1 and lower_tokens_list[subcmd_idx] == "config":
+            logger.warning(f"BLOCKED: config command is not allowed '{command}'")
+            return False
 
         # Check for rebase
         if "rebase" in lower_tokens:
