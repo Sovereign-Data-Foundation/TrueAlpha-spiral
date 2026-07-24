@@ -21,3 +21,8 @@
 **Vulnerability:** Command injection by process substitution `<(...)` and `>(...)` bypassed the command allowlist because `shlex.split` does not correctly tokenize them as commands.
 **Learning:** `shlex.split` is insufficient to prevent advanced bash syntax like process substitution from executing arbitrary commands.
 **Prevention:** Explicitly reject process substitution syntax `<(` and `>(` before tokenizing with `shlex`.
+
+## 2024-07-24 - Prevent Git Command Injection via `git config` and global options
+**Vulnerability:** The Git wrapper allowed users to set arbitrary `git config` options and use global options like `-p`, which could be exploited for command injection via malicious configurations (e.g. `core.pager`).
+**Learning:** Checking for flags naively without considering subcommand position allows bypassing filters. Subcommand-specific arguments (like `git log -p`) can overlap with global arguments (like `git -p status`) if not tracked via their position.
+**Prevention:** Iterating through the tokens to locate the subcommand index allows separating global configuration/options (which shouldn't be overridden interactively) from safe, localized parameters (e.g., specific `-p` or `--patch` uses).
