@@ -95,6 +95,30 @@ class GitActionGuard:
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
+        # Locate the subcommand index
+        subcommand_idx = -1
+        i = 1
+        while i < len(tokens):
+            if not tokens[i].startswith("-"):
+                subcommand_idx = i
+                break
+            # Skip argument for some common global options that take a value
+            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                i += 2
+            else:
+                i += 1
+
+        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
+            logger.warning(f"BLOCKED: git config is not allowed '{command}'")
+            return False
+
+        # Check for global -p option (before the subcommand)
+        for i in range(1, len(tokens)):
+            if tokens[i].lower() == "-p":
+                if subcommand_idx == -1 or i < subcommand_idx:
+                    logger.warning(f"BLOCKED: Dangerous global option '-p' '{command}'")
+                    return False
+
         # Check for rebase
         if "rebase" in lower_tokens:
             logger.warning(f"BLOCKED: Rebase is not allowed '{command}'")
