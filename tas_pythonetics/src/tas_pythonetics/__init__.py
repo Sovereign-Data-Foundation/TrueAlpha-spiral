@@ -10,6 +10,18 @@ from .replit_connector import (
     character_shannon_entropy,
     structural_density,
 )
+from .logit_runtime import (
+    LogitGuardrailReceipt,
+    NullCollapseError,
+    SentientLockError,
+    TrueAlphaSpiralRuntime,
+)
+from .tas_processor import (
+    STATUS_NULL_COLLAPSE,
+    STATUS_OK,
+    STATUS_SENTIENT_LOCK,
+    TASFusedLogitsProcessor,
+)
 from .tas_pythonetics import (
     recursive_truth_amplify,
     TAS_recursive_authenticate,
@@ -27,6 +39,14 @@ __all__ = [
     "TAS_recursive_authenticate",
     "detect_drift",
     "initiate_self_heal",
+    "LogitGuardrailReceipt",
+    "NullCollapseError",
+    "SentientLockError",
+    "TrueAlphaSpiralRuntime",
+    "STATUS_NULL_COLLAPSE",
+    "STATUS_OK",
+    "STATUS_SENTIENT_LOCK",
+    "TASFusedLogitsProcessor",
 ]
 
 # Immutable TAS_DNA as the logarithmic substrate for agnostic cursive coherence
