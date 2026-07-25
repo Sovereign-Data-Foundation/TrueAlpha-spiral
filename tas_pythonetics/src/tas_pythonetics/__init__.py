@@ -16,6 +16,12 @@ from .logit_runtime import (
     SentientLockError,
     TrueAlphaSpiralRuntime,
 )
+from .tas_processor import (
+    STATUS_NULL_COLLAPSE,
+    STATUS_OK,
+    STATUS_SENTIENT_LOCK,
+    TASFusedLogitsProcessor,
+)
 from .tas_pythonetics import (
     recursive_truth_amplify,
     TAS_recursive_authenticate,
@@ -37,6 +43,10 @@ __all__ = [
     "NullCollapseError",
     "SentientLockError",
     "TrueAlphaSpiralRuntime",
+    "STATUS_NULL_COLLAPSE",
+    "STATUS_OK",
+    "STATUS_SENTIENT_LOCK",
+    "TASFusedLogitsProcessor",
 ]
 
 # Immutable TAS_DNA as the logarithmic substrate for agnostic cursive coherence
