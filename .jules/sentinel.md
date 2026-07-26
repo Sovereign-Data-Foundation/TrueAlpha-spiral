@@ -26,3 +26,8 @@
 **Vulnerability:** The Git wrapper allowed users to set arbitrary `git config` options and use global options like `-p`, which could be exploited for command injection via malicious configurations (e.g. `core.pager`).
 **Learning:** Checking for flags naively without considering subcommand position allows bypassing filters. Subcommand-specific arguments (like `git log -p`) can overlap with global arguments (like `git -p status`) if not tracked via their position.
 **Prevention:** Iterating through the tokens to locate the subcommand index allows separating global configuration/options (which shouldn't be overridden interactively) from safe, localized parameters (e.g., specific `-p` or `--patch` uses).
+
+## 2024-07-26 - [Command Injection via Git --config-env Global Option]
+**Vulnerability:** Arbitrary command execution via Git `git_safety.py`. `GitActionGuard.authorize_command` failed to block the `--config-env` global option. Similar to `-c`, `--config-env` allows injecting arbitrary configuration values from the environment (e.g. `core.pager`), bypassing filters that protect against direct configuration modification.
+**Learning:** Preventing direct configuration injection with `-c` or `git config` is insufficient if the executable also supports injecting configurations via environment variables tied to command-line flags.
+**Prevention:** Explicitly block all flags that allow arbitrary configuration values to be set during command execution, including `--config-env`, to prevent indirect command injection via manipulated configurations.

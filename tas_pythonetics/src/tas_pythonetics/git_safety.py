@@ -91,7 +91,7 @@ class GitActionGuard:
         lower_tokens = {t.lower() for t in tokens}
 
         for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
+            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
@@ -103,7 +103,7 @@ class GitActionGuard:
                 subcommand_idx = i
                 break
             # Skip argument for some common global options that take a value
-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace", "--config-env"):
                 i += 2
             else:
                 i += 1
