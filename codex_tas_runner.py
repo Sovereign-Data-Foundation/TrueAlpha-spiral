@@ -112,6 +112,13 @@ def validate_script(script):
                             return False, f"Unauthorized command: {cmd_name}"
                         else:
                             return False, "Unauthorized path-based execution"
+                    if cmd_name in ('bash', 'python', 'python3'):
+                        for token_arg in cmd_tokens[1:]:
+                            if token_arg in ('-c', '-m'):
+                                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                            if token_arg.startswith('-') and not token_arg.startswith('--'):
+                                if 'c' in token_arg or 'm' in token_arg:
+                                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
@@ -129,6 +136,13 @@ def validate_script(script):
                     return False, f"Unauthorized command: {cmd_name}"
                 else:
                     return False, "Unauthorized path-based execution"
+            if cmd_name in ('bash', 'python', 'python3'):
+                for token_arg in cmd_tokens[1:]:
+                    if token_arg in ('-c', '-m'):
+                        return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    if token_arg.startswith('-') and not token_arg.startswith('--'):
+                        if 'c' in token_arg or 'm' in token_arg:
+                            return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
 
     print("Generated Script:\n")
     print(script)
