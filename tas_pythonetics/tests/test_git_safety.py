@@ -69,6 +69,7 @@ def test_guard_blocks_dangerous_global_options():
     assert guard.authorize_command("git config core.pager calc") is False
     assert guard.authorize_command("git -p status") is False
     assert guard.authorize_command("git log -p") is True
+    assert guard.authorize_command("git --config-env=core.pager=PAGER_ENV status") is False
 
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
