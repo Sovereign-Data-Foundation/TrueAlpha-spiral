@@ -1,10 +1,57 @@
+import enum
 import logging
 import subprocess
 import shlex
+from dataclasses import dataclass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class TransitionImpact(enum.Enum):
+    """
+    Characterizes what a Git operation will do to repository state.
+
+    This is the S_candidate classification in the state-transition model:
+        S_current + Action → S_candidate → Admissible(S_candidate)
+
+    The guard evaluates the impact class of a proposed command before
+    allowing any mutation.  Capability (the ability to run a command) is
+    explicitly separated from authority (the right to cause its consequence).
+    """
+    READ_ONLY = "read_only"
+    """No state mutation — inspection only (log, status, diff, show, fetch)."""
+    LOCAL_SAFE = "local_safe"
+    """Local, reversible state change (add, commit, checkout, stash, merge)."""
+    LOCAL_DESTRUCTIVE = "local_destructive"
+    """Local change with irreversible history impact (reset --hard, clean)."""
+    LINEAGE_REWRITE = "lineage_rewrite"
+    """Rewrites commit graph — destroys provenance (rebase, commit --amend)."""
+    REMOTE_MUTATION = "remote_mutation"
+    """Pushes new commits to a remote; requires branch authorization."""
+    REMOTE_DESTRUCTIVE = "remote_destructive"
+    """Rewrites or deletes remote history (force push, +refspec, --delete)."""
+    FORBIDDEN = "forbidden"
+    """Pre-authorized refusal: config injection, non-git binary, malformed input."""
+
+
+@dataclass(frozen=True)
+class StateTransition:
+    """
+    The explicit representation of a proposed Git state transition.
+
+    subcommand — the Git subcommand that would execute (empty string if
+                 the command cannot be parsed to that level)
+    impact     — the consequence class; what the command would do to state
+    admissible — whether the guard permits this transition
+    reason     — machine-readable token explaining the decision, suitable
+                 for audit logs and rule-provenance chains
+    """
+    subcommand: str
+    impact: TransitionImpact
+    admissible: bool
+    reason: str
 
 class GitStateMonitor:
     """
@@ -105,101 +152,134 @@ class GitActionGuard:
         assert isinstance(cls.PROTECTED_BRANCHES, frozenset), \
             "INTEGRITY FAILURE: PROTECTED_BRANCHES must be immutable"
 
-    def authorize_command(self, command: str) -> bool:
+    def classify_transition(self, command: str) -> StateTransition:
         """
-        Check if a command is safe to execute given the current state.
-        Uses shlex to properly parse the command line.
+        Map a proposed command to its explicit StateTransition.
+
+        This is the core of the state-transition boundary:
+            S_current + Action → S_candidate
+
+        The returned StateTransition characterizes what the command would do
+        to repository state (impact) and whether the guard permits it
+        (admissible), along with a machine-readable reason token.
+
+        All decisions are made before any mutation occurs.  The caller need
+        only inspect transition.admissible to decide whether to proceed.
         """
+        def refused(subcommand: str, impact: TransitionImpact, reason: str) -> StateTransition:
+            return StateTransition(subcommand, impact, False, reason)
+
+        def admitted(subcommand: str, impact: TransitionImpact, reason: str) -> StateTransition:
+            return StateTransition(subcommand, impact, True, reason)
+
+        # --- Pre-parse: structural injection attempts ---
         if any(marker in command for marker in ('<(', '>(', '$(', chr(96))):
-            logger.warning(f"BLOCKED: Process or command substitution syntax not allowed '{command}'")
-            return False
+            return refused("", TransitionImpact.FORBIDDEN, "process_substitution")
 
         try:
             tokens = shlex.split(command)
         except ValueError:
-            logger.warning(f"BLOCKED: Malformed command string '{command}'")
-            return False
+            return refused("", TransitionImpact.FORBIDDEN, "malformed_command")
 
         if not tokens:
-            return False
+            return refused("", TransitionImpact.FORBIDDEN, "empty_command")
 
         if tokens[0].lower() not in ("git", "git.exe"):
-            logger.warning(f"BLOCKED: Non-git command '{command}'")
-            return False
+            return refused("", TransitionImpact.FORBIDDEN, "non_git_binary")
 
-        # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
+        # --- Blocked global options (config/exec injection surface) ---
         for token in lower_tokens:
             if (
                 token in self._BLOCKED_GLOBAL_EXACT
                 or any(token.startswith(p) for p in self._BLOCKED_GLOBAL_PREFIXES)
             ):
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
-                return False
+                return refused("", TransitionImpact.FORBIDDEN, f"blocked_global_option:{token}")
 
-        # Locate the subcommand index
+        # --- Locate subcommand ---
         subcommand_idx = -1
         i = 1
         while i < len(tokens):
             if not tokens[i].startswith("-"):
                 subcommand_idx = i
                 break
-            # Skip argument for global options that consume the next token
             if tokens[i] in self._GLOBAL_VALUE_OPTIONS:
                 i += 2
             else:
                 i += 1
 
-        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
-            logger.warning(f"BLOCKED: git config is not allowed '{command}'")
-            return False
+        subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else ""
 
-        # Check for global -p option (before the subcommand)
-        for i in range(1, len(tokens)):
-            if tokens[i].lower() == "-p":
-                if subcommand_idx == -1 or i < subcommand_idx:
-                    logger.warning(f"BLOCKED: Dangerous global option '-p' '{command}'")
-                    return False
+        # --- Subcommand-level forbidden operations ---
+        if subcommand == "config":
+            return refused(subcommand, TransitionImpact.FORBIDDEN, "configuration_mutation")
 
-        # Check for rebase
-        if "rebase" in lower_tokens:
-            logger.warning(f"BLOCKED: Rebase is not allowed '{command}'")
-            return False
+        # Global -p before the subcommand is a pager-injection vector
+        for j in range(1, len(tokens)):
+            if tokens[j].lower() == "-p":
+                if subcommand_idx == -1 or j < subcommand_idx:
+                    return refused(subcommand, TransitionImpact.FORBIDDEN, "pager_injection")
 
-        # Check for reset --hard
-        if "reset" in lower_tokens and "--hard" in lower_tokens:
-             logger.warning(f"BLOCKED: reset --hard is not allowed '{command}'")
-             return False
+        # --- Lineage-rewriting operations ---
+        if subcommand == "rebase":
+            return refused(subcommand, TransitionImpact.LINEAGE_REWRITE, "lineage_rewrite_prohibited")
 
-        # Check for push operations
-        if "push" in lower_tokens:
-            # Check for force flags
+        if subcommand == "commit" and "--amend" in lower_tokens:
+            return refused(subcommand, TransitionImpact.LINEAGE_REWRITE, "lineage_rewrite_prohibited")
+
+        # --- Local destructive operations ---
+        if subcommand == "reset" and "--hard" in lower_tokens:
+            return refused(subcommand, TransitionImpact.LOCAL_DESTRUCTIVE, "local_destructive_prohibited")
+
+        if subcommand == "clean":
+            return refused(subcommand, TransitionImpact.LOCAL_DESTRUCTIVE, "local_destructive_prohibited")
+
+        # --- Remote operations ---
+        if subcommand == "push":
             for token in lower_tokens:
                 if token == "-f" or token.startswith("--force") or token.startswith("--delete"):
-                    logger.warning(f"BLOCKED: Force/Delete push is not allowed '{command}'")
-                    return False
-
-            # Check for +refspec in original tokens (case sensitive for refspecs usually, but '+' is key)
-            # We skip the first token usually ("git") and "push" command itself, but iterating all is safer.
+                    return refused(subcommand, TransitionImpact.REMOTE_DESTRUCTIVE, "remote_destructive_prohibited")
             for token in tokens:
-                # Refspecs starting with + are force pushes
                 if token.startswith("+"):
-                    logger.warning(f"BLOCKED: Force push via +refspec is not allowed '{command}'")
-                    return False
-
-            # Check for protected branch manipulation
+                    return refused(subcommand, TransitionImpact.REMOTE_DESTRUCTIVE, "remote_destructive_prohibited")
             try:
                 current_branch = self.monitor.get_current_branch()
             except Exception:
-                # If we can't determine branch, fail safe
-                return False
-
+                return refused(subcommand, TransitionImpact.REMOTE_MUTATION, "branch_state_unresolvable")
             if current_branch in self.PROTECTED_BRANCHES:
-                 logger.warning(f"BLOCKED: Direct push to protected branch '{current_branch}'")
-                 return False
+                return refused(subcommand, TransitionImpact.REMOTE_MUTATION, f"protected_branch:{current_branch}")
+            return admitted(subcommand, TransitionImpact.REMOTE_MUTATION, "remote_mutation_admitted")
 
-        return True
+        # --- Read-only operations ---
+        _READ_ONLY = frozenset({
+            "log", "status", "diff", "show", "ls-files", "ls-tree", "cat-file",
+            "rev-parse", "describe", "shortlog", "blame", "grep", "fetch",
+        })
+        if subcommand in _READ_ONLY:
+            return admitted(subcommand, TransitionImpact.READ_ONLY, "read_only_admitted")
+
+        # --- Local safe operations (local, reversible) ---
+        return admitted(subcommand, TransitionImpact.LOCAL_SAFE, "local_safe_admitted")
+
+    def authorize_command(self, command: str) -> bool:
+        """
+        Check if a command is safe to execute given the current state.
+
+        Delegates to classify_transition to obtain the explicit
+        S_current + Action → S_candidate evaluation, then returns
+        whether the resulting transition is admissible.  Callers that
+        need the full decision record should call classify_transition
+        directly.
+        """
+        transition = self.classify_transition(command)
+        if not transition.admissible:
+            logger.warning(
+                f"BLOCKED: subcommand={transition.subcommand!r} "
+                f"impact={transition.impact.value} reason={transition.reason} "
+                f"command={command!r}"
+            )
+        return transition.admissible
 
     def execute_safe(self, command: list) -> bool:
         """
