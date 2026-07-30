@@ -59,11 +59,51 @@ class GitStateMonitor:
 class GitActionGuard:
     """
     Intercepts and validates Git commands before execution.
+
+    The invariants below are the root of trust for this guard.  They must
+    remain auditable and change-controlled: any modification to
+    _BLOCKED_GLOBAL_EXACT or _BLOCKED_GLOBAL_PREFIXES removes a security
+    boundary and must be reviewed.  Call verify_own_integrity() to assert
+    these invariants are intact at runtime.
     """
-    PROTECTED_BRANCHES = ["main", "master", "production"]
+    PROTECTED_BRANCHES = frozenset(["main", "master", "production"])
+
+    # Global options that are blocked unconditionally (exact match, lowercased).
+    _BLOCKED_GLOBAL_EXACT: frozenset[str] = frozenset({"-c", "--paginate"})
+
+    # Global options that are blocked by prefix (lowercased).  Any token
+    # starting with one of these strings is refused.
+    _BLOCKED_GLOBAL_PREFIXES: tuple[str, ...] = ("--exec-path", "--config-env")
+
+    # Global options that consume the next token as their value.  Used to
+    # advance the subcommand-index search past value arguments.
+    _GLOBAL_VALUE_OPTIONS: frozenset[str] = frozenset(
+        {"-C", "-c", "--work-tree", "--git-dir", "--namespace", "--config-env"}
+    )
 
     def __init__(self, monitor: GitStateMonitor):
         self.monitor = monitor
+
+    @classmethod
+    def verify_own_integrity(cls) -> None:
+        """Assert that the guard's critical invariants are intact.
+
+        This method embodies the principle that integrity controls itself:
+        the enforcement mechanism verifies its own rule set before being
+        used.  It raises AssertionError if any invariant has been removed.
+        """
+        assert "-c" in cls._BLOCKED_GLOBAL_EXACT, \
+            "INTEGRITY FAILURE: '-c' must be blocked"
+        assert "--paginate" in cls._BLOCKED_GLOBAL_EXACT, \
+            "INTEGRITY FAILURE: '--paginate' must be blocked"
+        assert any(p == "--exec-path" for p in cls._BLOCKED_GLOBAL_PREFIXES), \
+            "INTEGRITY FAILURE: '--exec-path' prefix must be blocked"
+        assert any(p == "--config-env" for p in cls._BLOCKED_GLOBAL_PREFIXES), \
+            "INTEGRITY FAILURE: '--config-env' prefix must be blocked"
+        assert "--config-env" in cls._GLOBAL_VALUE_OPTIONS, \
+            "INTEGRITY FAILURE: '--config-env' must be listed as a value-consuming option"
+        assert isinstance(cls.PROTECTED_BRANCHES, frozenset), \
+            "INTEGRITY FAILURE: PROTECTED_BRANCHES must be immutable"
 
     def authorize_command(self, command: str) -> bool:
         """
@@ -91,7 +131,10 @@ class GitActionGuard:
         lower_tokens = {t.lower() for t in tokens}
 
         for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
+            if (
+                token in self._BLOCKED_GLOBAL_EXACT
+                or any(token.startswith(p) for p in self._BLOCKED_GLOBAL_PREFIXES)
+            ):
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
@@ -102,8 +145,8 @@ class GitActionGuard:
             if not tokens[i].startswith("-"):
                 subcommand_idx = i
                 break
-            # Skip argument for some common global options that take a value
-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace", "--config-env"):
+            # Skip argument for global options that consume the next token
+            if tokens[i] in self._GLOBAL_VALUE_OPTIONS:
                 i += 2
             else:
                 i += 1

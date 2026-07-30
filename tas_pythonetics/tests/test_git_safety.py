@@ -95,3 +95,27 @@ def test_guard_blocks_process_substitution():
     assert guard.authorize_command("git add >(tee log.txt)") is False
     assert guard.authorize_command("git push origin $(echo main)") is False
     assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
+
+def test_guard_blocks_config_env_injection():
+    """--config-env must be blocked: it allows arbitrary configuration via environment
+    variables (e.g. core.pager), bypassing the -c filter and enabling RCE."""
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    # Inline value form: --config-env=core.pager=MY_PAGER
+    assert guard.authorize_command("git --config-env=core.pager=MY_PAGER log") is False
+    # Separate value form: --config-env core.pager=MY_PAGER
+    assert guard.authorize_command("git --config-env core.pager=MY_PAGER status") is False
+    # Mixed-case variant
+    assert guard.authorize_command("git --Config-Env=core.pager=cmd status") is False
+    # Ensure safe commands are still allowed after the above checks
+    assert guard.authorize_command("git log --oneline") is True
+
+def test_guard_own_integrity():
+    """integrity controls itself: the guard must be able to verify its own invariants."""
+    # Must not raise
+    GitActionGuard.verify_own_integrity()
+
+def test_protected_branches_are_immutable():
+    """PROTECTED_BRANCHES must be a frozenset so the guard's boundary cannot be
+    silently widened at runtime."""
+    assert isinstance(GitActionGuard.PROTECTED_BRANCHES, frozenset)
