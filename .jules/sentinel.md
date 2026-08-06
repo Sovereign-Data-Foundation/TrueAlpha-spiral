@@ -36,3 +36,13 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block the `--config-env` global configuration option, allowing command execution via Git even when root commands, destructive arguments, and other global options (like `-c` and `--exec-path`) were checked.
 **Learning:** Similar to `-c` and `--exec-path`, `--config-env` allows injecting configuration settings (like `core.pager`) via environment variables, which can lead to command execution.
 **Prevention:** Explicitly block `--config-env` when wrapping Git or any extensible command-line tools, as it provides an alternative mechanism for injecting configurations.
+
+## 2026-04-03 - [Command Injection via Attached Git Global Options]
+**Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to correctly identify the dangerous `-c` global configuration option when it was attached to its value (e.g., `git -ccore.pager=pwned ...`), as the check strictly tested for token equality (`token == "-c"`).
+**Learning:** Argument filtering must account for cases where values are directly attached to short flag options, bypassing simple equality checks against tokenized arguments.
+**Prevention:** Use `startswith` string matching (e.g., `token.startswith("-c")`) and properly adjust index parsing to handle attached argument values when wrapping Git or extensible command-line tools.
+
+## 2026-04-03 - [Command Injection via Multiple Shell Environment Assignments]
+**Vulnerability:** Command injection in `codex_tas_runner.py`. The `validate_script` function only stripped the first environment variable assignment (e.g. `VAR=value command`) before checking the base command against the allowlist. This allowed an attacker to execute arbitrary commands by prepending multiple environment variable assignments, hiding the real command or executing unallowed arguments (e.g., `ENV1=val ENV2=val bash -c 'malicious'`).
+**Learning:** Shell interpreters allow stringing multiple environment variable assignments together before the actual executable. A validator must correctly parse through all of them to accurately identify the base command and its arguments.
+**Prevention:** Use a loop to iterate through all leading tokens containing `=` to locate the actual command executable and properly assess its arguments.

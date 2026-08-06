@@ -90,10 +90,7 @@ class GitActionGuard:
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
-        for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
-                return False
+
 
         # Locate the subcommand index
         subcommand_idx = -1
@@ -105,6 +102,8 @@ class GitActionGuard:
             # Skip argument for some common global options that take a value
             if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
                 i += 2
+            elif tokens[i].startswith("-c") and len(tokens[i]) > 2:
+                i += 1
             else:
                 i += 1
 
@@ -112,11 +111,12 @@ class GitActionGuard:
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
             return False
 
-        # Check for global -p option (before the subcommand)
+        # Check for global dangerous options (before the subcommand)
         for i in range(1, len(tokens)):
-            if tokens[i].lower() == "-p":
-                if subcommand_idx == -1 or i < subcommand_idx:
-                    logger.warning(f"BLOCKED: Dangerous global option '-p' '{command}'")
+            if subcommand_idx == -1 or i < subcommand_idx:
+                token_lower = tokens[i].lower()
+                if token_lower == "-c" or token_lower.startswith("-c") or token_lower.startswith("--exec-path") or token_lower in ("-p", "--paginate") or token_lower.startswith("--config-env"):
+                    logger.warning(f"BLOCKED: Dangerous global option '{tokens[i]}' in '{command}'")
                     return False
 
         # Check for rebase

@@ -1,0 +1,24 @@
+--- tas_pythonetics/src/tas_pythonetics/git_safety.py
++++ tas_pythonetics/src/tas_pythonetics/git_safety.py
+@@ -91,7 +91,7 @@
+         lower_tokens = {t.lower() for t in tokens}
+
+         for token in lower_tokens:
+-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
++            if token == "-c" or token.startswith("-c") or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
+                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                 return False
+
+@@ -103,7 +103,11 @@
+                 subcommand_idx = i
+                 break
+             # Skip argument for some common global options that take a value
+-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
++            if tokens[i].startswith("-c") and len(tokens[i]) > 2:
++                 # This means it's attached like -ccore.pager=malicious, so the next token is NOT the argument to -c
++                 i += 1
++                 continue
++            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace") or tokens[i].startswith("-c"):
+                 i += 2
+             else:
+                 i += 1
