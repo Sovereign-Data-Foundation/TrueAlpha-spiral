@@ -1,0 +1,45 @@
+--- tas_pythonetics/src/tas_pythonetics/git_safety.py
++++ tas_pythonetics/src/tas_pythonetics/git_safety.py
+@@ -91,33 +91,33 @@
+         lower_tokens = {t.lower() for t in tokens}
+
+-        for token in lower_tokens:
+-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
+-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+-                return False
+-
+         # Locate the subcommand index
+         subcommand_idx = -1
+         i = 1
+         while i < len(tokens):
+             if not tokens[i].startswith("-"):
+                 subcommand_idx = i
+                 break
+             # Skip argument for some common global options that take a value
+-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
++            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace") or tokens[i].startswith("-c"):
+                 i += 2
+             else:
+                 i += 1
+
++        # Check for global options BEFORE the subcommand
++        for i in range(1, len(tokens)):
++            if subcommand_idx == -1 or i < subcommand_idx:
++                token_lower = tokens[i].lower()
++                if token_lower == "-c" or token_lower.startswith("-c") or token_lower.startswith("--exec-path") or token_lower in ("-p", "--paginate") or token_lower.startswith("--config-env"):
++                    logger.warning(f"BLOCKED: Dangerous global option '{tokens[i]}' '{command}'")
++                    return False
++
+         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
+             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
+             return False
+
+-        # Check for global -p option (before the subcommand)
+-        for i in range(1, len(tokens)):
+-            if tokens[i].lower() == "-p":
+-                if subcommand_idx == -1 or i < subcommand_idx:
+-                    logger.warning(f"BLOCKED: Dangerous global option '-p' '{command}'")
+-                    return False
+-
+         # Check for rebase
+         if "rebase" in lower_tokens:
