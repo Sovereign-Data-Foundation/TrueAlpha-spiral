@@ -90,20 +90,24 @@ class GitActionGuard:
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
-        for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate" or token.startswith("--config-env"):
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
-                return False
-
-        # Locate the subcommand index
+        # Locate the subcommand index and check global options
         subcommand_idx = -1
         i = 1
         while i < len(tokens):
             if not tokens[i].startswith("-"):
                 subcommand_idx = i
                 break
-            # Skip argument for some common global options that take a value
-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+
+            token = tokens[i]
+            token_lower = token.lower()
+
+            # Check for dangerous global options. Note: -C is safe (changes directory) but -c is dangerous (config).
+            if token.startswith("-c") or token_lower.startswith("--exec-path") or token_lower == "--paginate" or token_lower.startswith("--config-env") or token_lower == "-p":
+                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                return False
+
+            # Skip argument for some common global options that take a value as a separate token
+            if token in ("-C", "--work-tree", "--git-dir", "--namespace"):
                 i += 2
             else:
                 i += 1
@@ -111,13 +115,6 @@ class GitActionGuard:
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
             return False
-
-        # Check for global -p option (before the subcommand)
-        for i in range(1, len(tokens)):
-            if tokens[i].lower() == "-p":
-                if subcommand_idx == -1 or i < subcommand_idx:
-                    logger.warning(f"BLOCKED: Dangerous global option '-p' '{command}'")
-                    return False
 
         # Check for rebase
         if "rebase" in lower_tokens:
