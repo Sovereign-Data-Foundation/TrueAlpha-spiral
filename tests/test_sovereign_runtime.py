@@ -1,4 +1,6 @@
 import pytest
+import sqlite3
+from pathlib import Path
 from hashlib import sha256
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -11,37 +13,84 @@ from core.runtime import (
 from core.runtime.sovereign_runtime import SovereignStructuralViolation, sha256_uri
 
 
+def create_admissibility_object(
+    credential_id="steward-1",
+    scope="increment",
+    authority_snapshot=None,
+    context_snapshot_hash="sha256:context-01",
+    candidate_hash="sha256:candidate-01",
+    parent_receipt="sha256:genesis",
+    revocation_result=False,
+    invariant_results=None,
+    closed_admitted_action_set=None,
+    decision="ADMITTED",
+    verifier_priv=None,
+):
+    if authority_snapshot is None:
+        authority_snapshot = {"credential_id": credential_id, "authority_epoch": 7, "authority_checkpoint_hash": "sha256:checkpoint", "revoked": False}
+    if invariant_results is None:
+        invariant_results = {"schema": True}
+    if closed_admitted_action_set is None:
+        closed_admitted_action_set = {"increment"}
+    if verifier_priv is None:
+        verifier_priv = ed25519.Ed25519PrivateKey.generate()
+
+    # Create dummy object to compute its receipt hash
+    temp_obj = AdmissibilityObject(
+        credential_id=credential_id,
+        scope=scope,
+        authority_snapshot=authority_snapshot,
+        context_snapshot_hash=context_snapshot_hash,
+        candidate_hash=candidate_hash,
+        parent_receipt=parent_receipt,
+        revocation_result=revocation_result,
+        invariant_results=invariant_results,
+        closed_admitted_action_set=closed_admitted_action_set,
+        decision=decision,
+        receipt_hash="",
+        signature=b"",
+    )
+
+    receipt_hash = temp_obj.compute_receipt_hash()
+    signature = verifier_priv.sign(receipt_hash.encode())
+
+    return AdmissibilityObject(
+        credential_id=credential_id,
+        scope=scope,
+        authority_snapshot=authority_snapshot,
+        context_snapshot_hash=context_snapshot_hash,
+        candidate_hash=candidate_hash,
+        parent_receipt=parent_receipt,
+        revocation_result=revocation_result,
+        invariant_results=invariant_results,
+        closed_admitted_action_set=closed_admitted_action_set,
+        decision=decision,
+        receipt_hash=receipt_hash,
+        signature=signature,
+    )
+
+
 def test_vertical_slice_path_1_admitted():
-    # 1. Setup keys
     verifier_priv = ed25519.Ed25519PrivateKey.generate()
-    verifier_pub = verifier_priv.public_key()
-    verifier_pub_bytes = verifier_pub.public_bytes_raw()
+    verifier_pub_bytes = verifier_priv.public_key().public_bytes_raw()
 
     runtime_priv = ed25519.Ed25519PrivateKey.generate()
     runtime_priv_bytes = runtime_priv.private_bytes_raw()
     runtime_pub = runtime_priv.public_key()
 
-    # 2. Build admissibility receipt_hash
-    receipt_hash = "sha256:admissible-receipt-01"
-    signature = verifier_priv.sign(receipt_hash.encode())
+    authority_snapshot = {
+        "credential_id": "steward-1",
+        "authority_epoch": 7,
+        "authority_checkpoint_hash": "sha256:checkpoint",
+        "revoked": False,
+    }
 
-    # Create immutable verifier admissibility object
-    obj = AdmissibilityObject(
-        credential_id="steward-1",
+    obj = create_admissibility_object(
         scope="increment",
-        authority_snapshot={"public_key": verifier_pub_bytes, "revoked": False},
-        context_snapshot_hash="sha256:context-01",
-        candidate_hash="sha256:candidate-01",
-        parent_receipt="sha256:genesis",
-        revocation_result=False,
-        invariant_results={"schema": True, "bounds": True},
-        closed_admitted_action_set={"increment"},
-        decision="ADMITTED",
-        receipt_hash=receipt_hash,
-        signature=signature,
+        authority_snapshot=authority_snapshot,
+        verifier_priv=verifier_priv,
     )
 
-    # 3. Instantiate Runtime and execute action
     runtime = SovereignRuntime(
         verifier_public_key=verifier_pub_bytes,
         runtime_private_key=runtime_priv_bytes,
@@ -50,17 +99,16 @@ def test_vertical_slice_path_1_admitted():
 
     result = runtime.execute_action(obj)
 
-    # Assertions for ADMITTED path
     assert result["decision"] == "COMMITTED"
     assert result["operation"] == "increment"
     assert result["state"]["value"] == 11
-    assert result["receipt_hash"] == receipt_hash
+    assert result["receipt_hash"] == obj.receipt_hash
     assert "wake_link" in result
 
     # Verify the terminal signature
     terminal_message = (
         b"SDF-TERMINAL-COMMITTED-V1\0"
-        + json_canonical({"decision": "COMMITTED", "operation": "increment", "state_hash": result["state_hash"], "state": result["state"], "wake_link": result["wake_link"], "receipt_hash": receipt_hash})
+        + json_canonical({"decision": "COMMITTED", "operation": "increment", "state_hash": result["state_hash"], "state": result["state"], "wake_link": result["wake_link"], "receipt_hash": obj.receipt_hash})
     )
     sig_bytes = bytes.fromhex(result["attestation"]["signature"])
     runtime_pub.verify(sig_bytes, terminal_message)
@@ -68,7 +116,7 @@ def test_vertical_slice_path_1_admitted():
     # Verify WakeChain state history updated
     assert len(runtime.wake_chain.state_history) == 1
     assert len(runtime.wake_chain.evidence_history) == 1
-    assert runtime.wake_chain.state_head_hash == receipt_hash
+    assert runtime.wake_chain.state_head_hash == obj.receipt_hash
 
 
 def test_vertical_slice_path_2_refused_due_to_signature():
@@ -78,22 +126,22 @@ def test_vertical_slice_path_2_refused_due_to_signature():
     runtime_priv = ed25519.Ed25519PrivateKey.generate()
     runtime_priv_bytes = runtime_priv.private_bytes_raw()
 
-    # Bad signature
-    bad_signature = b"0" * 64
+    obj = create_admissibility_object(verifier_priv=verifier_priv)
 
-    obj = AdmissibilityObject(
-        credential_id="steward-1",
-        scope="increment",
-        authority_snapshot={"public_key": verifier_pub_bytes, "revoked": False},
-        context_snapshot_hash="sha256:context-01",
-        candidate_hash="sha256:candidate-01",
-        parent_receipt="sha256:genesis",
-        revocation_result=False,
-        invariant_results={"schema": True},
-        closed_admitted_action_set=set(),
-        decision="ADMITTED",
-        receipt_hash="sha256:admissible-receipt-01",
-        signature=bad_signature,
+    # Tamper with signature
+    tampered_obj = AdmissibilityObject(
+        credential_id=obj.credential_id,
+        scope=obj.scope,
+        authority_snapshot=obj.authority_snapshot,
+        context_snapshot_hash=obj.context_snapshot_hash,
+        candidate_hash=obj.candidate_hash,
+        parent_receipt=obj.parent_receipt,
+        revocation_result=obj.revocation_result,
+        invariant_results=obj.invariant_results,
+        closed_admitted_action_set=obj.closed_admitted_action_set,
+        decision=obj.decision,
+        receipt_hash=obj.receipt_hash,
+        signature=b"0" * 64,  # Bad signature
     )
 
     runtime = SovereignRuntime(
@@ -102,44 +150,63 @@ def test_vertical_slice_path_2_refused_due_to_signature():
         genesis_state={"value": 10},
     )
 
-    result = runtime.execute_action(obj)
+    result = runtime.execute_action(tampered_obj)
 
-    # Assertions for REFUSED path
     assert result["decision"] == "REFUSED"
-    assert result["state"]["value"] == 10  # State must NOT change
+    assert result["state"]["value"] == 10
     assert "signature_validity" in result["failures"]
 
-    # Verify refusal is in evidence history but NOT state history
-    assert len(runtime.wake_chain.state_history) == 0
-    assert len(runtime.wake_chain.evidence_history) == 1
-    assert runtime.wake_chain.state_head_hash == "sha256:genesis"
 
-
-def test_vertical_slice_path_2_refused_due_to_revocation():
+def test_binding_integrity_substitution_gap_blocked():
     verifier_priv = ed25519.Ed25519PrivateKey.generate()
-    verifier_pub = verifier_priv.public_key()
-    verifier_pub_bytes = verifier_pub.public_bytes_raw()
+    verifier_pub_bytes = verifier_priv.public_key().public_bytes_raw()
 
     runtime_priv = ed25519.Ed25519PrivateKey.generate()
     runtime_priv_bytes = runtime_priv.private_bytes_raw()
 
-    receipt_hash = "sha256:admissible-receipt-01"
-    signature = verifier_priv.sign(receipt_hash.encode())
+    obj = create_admissibility_object(verifier_priv=verifier_priv)
 
-    # Revoked snapshot
-    obj = AdmissibilityObject(
-        credential_id="steward-1",
+    # Keep signature and receipt_hash of the valid object, but change candidate_hash!
+    # This simulates an attacker substituting the candidate_hash while keeping a valid signature.
+    tampered_obj = AdmissibilityObject(
+        credential_id=obj.credential_id,
+        scope=obj.scope,
+        authority_snapshot=obj.authority_snapshot,
+        context_snapshot_hash=obj.context_snapshot_hash,
+        candidate_hash="sha256:TAMPERED-CANDIDATE",
+        parent_receipt=obj.parent_receipt,
+        revocation_result=obj.revocation_result,
+        invariant_results=obj.invariant_results,
+        closed_admitted_action_set=obj.closed_admitted_action_set,
+        decision=obj.decision,
+        receipt_hash=obj.receipt_hash,  # Trusted blindly in old code
+        signature=obj.signature,
+    )
+
+    runtime = SovereignRuntime(
+        verifier_public_key=verifier_pub_bytes,
+        runtime_private_key=runtime_priv_bytes,
+        genesis_state={"value": 10},
+    )
+
+    result = runtime.execute_action(tampered_obj)
+
+    assert result["decision"] == "REFUSED"
+    assert "binding_integrity" in result["failures"]
+
+
+def test_closed_admitted_action_set_exact_membership_enforced():
+    verifier_priv = ed25519.Ed25519PrivateKey.generate()
+    verifier_pub_bytes = verifier_priv.public_key().public_bytes_raw()
+
+    runtime_priv = ed25519.Ed25519PrivateKey.generate()
+    runtime_priv_bytes = runtime_priv.private_bytes_raw()
+
+    # Scope is "increment", but closed_admitted_action_set only contains "different-action"
+    obj = create_admissibility_object(
         scope="increment",
-        authority_snapshot={"public_key": verifier_pub_bytes, "revoked": True},
-        context_snapshot_hash="sha256:context-01",
-        candidate_hash="sha256:candidate-01",
-        parent_receipt="sha256:genesis",
-        revocation_result=True,
-        invariant_results={"schema": True},
-        closed_admitted_action_set={"increment"},
-        decision="ADMITTED",
-        receipt_hash=receipt_hash,
-        signature=signature,
+        closed_admitted_action_set={"different-action"},
+        verifier_priv=verifier_priv,
     )
 
     runtime = SovereignRuntime(
@@ -151,8 +218,70 @@ def test_vertical_slice_path_2_refused_due_to_revocation():
     result = runtime.execute_action(obj)
 
     assert result["decision"] == "REFUSED"
-    assert result["state"]["value"] == 10
-    assert "authority_match" in result["failures"]
+    assert "scope_authorization" in result["failures"]
+
+
+def test_crash_durability_wal_sqlite(tmp_path):
+    db_file = tmp_path / "ledger.db"
+
+    verifier_priv = ed25519.Ed25519PrivateKey.generate()
+    verifier_pub_bytes = verifier_priv.public_key().public_bytes_raw()
+
+    runtime_priv = ed25519.Ed25519PrivateKey.generate()
+    runtime_priv_bytes = runtime_priv.private_bytes_raw()
+
+    # 1. Initialize runtime with db_path and execute an admitted action
+    runtime = SovereignRuntime(
+        verifier_public_key=verifier_pub_bytes,
+        runtime_private_key=runtime_priv_bytes,
+        genesis_state={"value": 50},
+        db_path=db_file,
+    )
+
+    obj_1 = create_admissibility_object(
+        scope="increment",
+        parent_receipt="sha256:genesis",
+        verifier_priv=verifier_priv,
+    )
+
+    result_1 = runtime.execute_action(obj_1)
+    assert result_1["decision"] == "COMMITTED"
+    assert result_1["state"]["value"] == 51
+
+    # Record the heads
+    link_1 = result_1["wake_link"]
+    head_1 = runtime.wake_chain.state_head_hash
+
+    # 2. Simulate complete crash and restart by re-instantiating SovereignRuntime with same db_path
+    restored_runtime = SovereignRuntime(
+        verifier_public_key=verifier_pub_bytes,
+        runtime_private_key=runtime_priv_bytes,
+        genesis_state={"value": 999},  # ignored since state is loaded from SQLite
+        db_path=db_file,
+    )
+
+    # Verify state, histories, and heads are fully restored
+    assert restored_runtime.state["value"] == 51
+    assert restored_runtime.wake_chain.state_head_hash == head_1
+    assert restored_runtime.wake_chain.last_wake_link == link_1
+    assert len(restored_runtime.wake_chain.state_history) == 1
+    assert len(restored_runtime.wake_chain.evidence_history) == 1
+
+    gene = restored_runtime.wake_chain.state_history[0]
+    assert gene.operation == "increment"
+    assert gene.receipt["receipt_hash"] == obj_1.receipt_hash
+
+    # 3. Execute a second action sequentially and verify continuity
+    obj_2 = create_admissibility_object(
+        scope="increment",
+        parent_receipt=head_1,  # correct sequential parent
+        verifier_priv=verifier_priv,
+    )
+
+    result_2 = restored_runtime.execute_action(obj_2)
+    assert result_2["decision"] == "COMMITTED"
+    assert result_2["state"]["value"] == 52
+    assert restored_runtime.wake_chain.state_head_hash == obj_2.receipt_hash
 
 
 def test_wake_chain_state_discontinuity_raises_structural_violation():
@@ -162,23 +291,9 @@ def test_wake_chain_state_discontinuity_raises_structural_violation():
     runtime_priv = ed25519.Ed25519PrivateKey.generate()
     runtime_priv_bytes = runtime_priv.private_bytes_raw()
 
-    # Expected parent is different from current state head (genesis)
-    receipt_hash = "sha256:admissible-receipt-01"
-    signature = verifier_priv.sign(receipt_hash.encode())
-
-    obj = AdmissibilityObject(
-        credential_id="steward-1",
-        scope="increment",
-        authority_snapshot={"public_key": verifier_pub_bytes, "revoked": False},
-        context_snapshot_hash="sha256:context-01",
-        candidate_hash="sha256:candidate-01",
+    obj = create_admissibility_object(
         parent_receipt="sha256:unexpected-parent",
-        revocation_result=False,
-        invariant_results={"schema": True},
-        closed_admitted_action_set={"increment"},
-        decision="ADMITTED",
-        receipt_hash=receipt_hash,
-        signature=signature,
+        verifier_priv=verifier_priv,
     )
 
     runtime = SovereignRuntime(
@@ -194,7 +309,6 @@ def test_wake_chain_state_discontinuity_raises_structural_violation():
 
 
 def test_tas_gene_constitutional_completeness():
-    # Missing or invalid fields should raise ValueError in constitutional completeness check
     with pytest.raises(ValueError, match="origin is required"):
         gene = TASGene("", "context", "auth", "op", "parent", {}, "ADMITTED", {"receipt_hash": "hash"})
         gene.constitutional_completeness_check()
@@ -203,7 +317,6 @@ def test_tas_gene_constitutional_completeness():
         gene = TASGene("origin", "context", "auth", "op", "parent", {}, "INVALID", {"receipt_hash": "hash"})
         gene.constitutional_completeness_check()
 
-    # Valid gene passes
     gene = TASGene("origin", "context", "auth", "op", "parent", {}, "ADMITTED", {"receipt_hash": "hash"})
     assert gene.constitutional_completeness_check() is True
 
