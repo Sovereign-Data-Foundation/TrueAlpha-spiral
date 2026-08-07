@@ -36,3 +36,7 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block the `--config-env` global configuration option, allowing command execution via Git even when root commands, destructive arguments, and other global options (like `-c` and `--exec-path`) were checked.
 **Learning:** Similar to `-c` and `--exec-path`, `--config-env` allows injecting configuration settings (like `core.pager`) via environment variables, which can lead to command execution.
 **Prevention:** Explicitly block `--config-env` when wrapping Git or any extensible command-line tools, as it provides an alternative mechanism for injecting configurations.
+## 2026-08-06 - [Command Injection via Concatenated GNU Options]
+**Vulnerability:** The Git wrapper (`GitActionGuard`) attempted to block dangerous global options (like `-c`) but failed to account for GNU-style concatenated short options (e.g., `-ccore.pager=!echo pwned`), allowing command injection.
+**Learning:** Naive equality checks (`token == "-c"`) in argument sanitizers are insufficient for command line utilities that allow concatenated short options. In addition, iterating through all arguments can falsely block valid subcommand arguments.
+**Prevention:** Always check prefixes (`token.startswith("-c")`) when sanitizing short options that accept values. Ensure option parsing strictly separates global options from subcommand arguments.
