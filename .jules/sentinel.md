@@ -40,3 +40,7 @@
 **Vulnerability:** The Git wrapper (`GitActionGuard`) attempted to block dangerous global options (like `-c`) but failed to account for GNU-style concatenated short options (e.g., `-ccore.pager=!echo pwned`), allowing command injection.
 **Learning:** Naive equality checks (`token == "-c"`) in argument sanitizers are insufficient for command line utilities that allow concatenated short options. In addition, iterating through all arguments can falsely block valid subcommand arguments.
 **Prevention:** Always check prefixes (`token.startswith("-c")`) when sanitizing short options that accept values. Ensure option parsing strictly separates global options from subcommand arguments.
+## 2024-05-18 - Fix script validation bypass via environment variables
+**Vulnerability:** Command validation in `codex_tas_runner.py` only skipped a single environment variable. This allowed attackers to bypass argument checks (like `-c` for python) by prepending multiple environment variables (e.g., `A=1 B=2 python -c ...`).
+**Learning:** Naive array indexing (e.g. `cmd_tokens[1:]`) fails when extracting command names and arguments from a tokenized shell command that might contain multiple prefix assignments.
+**Prevention:** Always iterate through all tokens, skipping valid variable assignments (using regex `^[a-zA-Z_][a-zA-Z0-9_]*$`) to definitively isolate the command and its arguments.
