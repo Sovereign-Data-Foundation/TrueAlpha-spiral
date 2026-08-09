@@ -119,6 +119,17 @@ class GitActionGuard:
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
+        # Check for remote execution injection
+        for token in tokens:
+            if token.startswith("--upload-pack") or token.startswith("--receive-pack"):
+                logger.warning(f"BLOCKED: Remote pack execution is not allowed '{command}'")
+                return False
+
+        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
+            if "-u" in tokens:
+                logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
+                return False
+
         # Check for rebase
         if "rebase" in lower_tokens:
             logger.warning(f"BLOCKED: Rebase is not allowed '{command}'")

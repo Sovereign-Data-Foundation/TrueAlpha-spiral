@@ -40,3 +40,8 @@
 **Vulnerability:** The Git wrapper (`GitActionGuard`) attempted to block dangerous global options (like `-c`) but failed to account for GNU-style concatenated short options (e.g., `-ccore.pager=!echo pwned`), allowing command injection.
 **Learning:** Naive equality checks (`token == "-c"`) in argument sanitizers are insufficient for command line utilities that allow concatenated short options. In addition, iterating through all arguments can falsely block valid subcommand arguments.
 **Prevention:** Always check prefixes (`token.startswith("-c")`) when sanitizing short options that accept values. Ensure option parsing strictly separates global options from subcommand arguments.
+
+## 2026-08-09 - [Command Injection via Git Remote Pack Execution]
+**Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block remote repository execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone), allowing command execution when connecting to a remote.
+**Learning:** Command line utilities that connect to remote endpoints can often execute arbitrary binaries via options that specify the protocol handlers. These can be abused to run local arbitrary commands.
+**Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) when wrapping remote-capable command-line tools.
