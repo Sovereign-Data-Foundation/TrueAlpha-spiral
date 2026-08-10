@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install pytest
+        run: pip install pytest==8.1.1 numpy==1.26.4 cryptography
       - name: Run tests
         run: PYTHONPATH=$(pwd)/tas_pythonetics/src:$(pwd)/tas-recursion-conversion:$(pwd) pytest -q
 # Nonce: 56328
