@@ -127,11 +127,14 @@ class GitActionGuard:
                 lowered_token == opt or lowered_token.startswith(f"{opt}=")
                 for opt in self.REMOTE_PROGRAM_SELECTOR_OPTIONS
             ):
-                logger.warning(f"BLOCKED: Remote pack execution is not allowed '{command}'")
+                logger.warning(f"BLOCKED: Remote program selector option is not allowed '{command}'")
                 return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
-            if any(token == "-u" or token.startswith("-u") for token in tokens):
+            if any(
+                tok == "-u" or (tok.startswith("-u") and not tok.startswith("--"))
+                for tok in tokens
+            ):
                 logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
                 return False
 
