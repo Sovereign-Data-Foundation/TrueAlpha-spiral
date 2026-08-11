@@ -126,7 +126,7 @@ class GitActionGuard:
                 return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
-            if "-u" in tokens:
+            if any(t == "-u" or (t.startswith("-u") and not t.startswith("--")) for t in tokens):
                 logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
                 return False
 

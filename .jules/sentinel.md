@@ -45,3 +45,8 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block remote repository execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone), allowing command execution when connecting to a remote.
 **Learning:** Command line utilities that connect to remote endpoints can often execute arbitrary binaries via options that specify the protocol handlers. These can be abused to run local arbitrary commands.
 **Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) when wrapping remote-capable command-line tools.
+
+## 2024-05-18 - [Command Injection via GNU Short Flag Concatenation Bypass in Git Clone]
+**Vulnerability:** A command injection vulnerability in `GitActionGuard` caused by improper validation of the `git clone -u` (or `--upload-pack`) option. The filter solely checked if the exact token `"-u"` existed, allowing attackers to exploit standard GNU flag concatenation (e.g., `-u'touch /tmp/pwned'`) to bypass the filter and execute arbitrary commands.
+**Learning:** Command line parsers like `shlex` output concatenated short flags and their values as a single token (e.g., `["git", "clone", "-u'echo pwned'", "url"]`). Exact-match checks on short flags (e.g., `if "-u" in tokens:`) are fundamentally flawed and insufficient for security boundaries.
+**Prevention:** When validating short flags in command-line tools that support GNU-style concatenation, always use prefix checking (e.g., `token.startswith("-u")`) to capture both standalone usage and concatenated values, taking care to avoid matching long-form flags (e.g., `--update`).

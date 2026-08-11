@@ -96,3 +96,9 @@ def test_guard_blocks_process_substitution():
     assert guard.authorize_command("git add >(tee log.txt)") is False
     assert guard.authorize_command("git push origin $(echo main)") is False
     assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
+
+def test_guard_blocks_remote_pack_execution_with_concatenated_flag():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git clone -uecho url") is False
+    assert guard.authorize_command("git clone --upload-pack=echo url") is False
