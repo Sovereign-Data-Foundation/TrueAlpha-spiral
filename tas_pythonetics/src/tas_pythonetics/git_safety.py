@@ -108,7 +108,7 @@ class GitActionGuard:
                 token.startswith("--exec-path") or
                 token == "--paginate" or
                 token.startswith("--config-env") or
-                token.lower() == "-p"):
+                token.lower().startswith("-p")):
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
@@ -126,7 +126,7 @@ class GitActionGuard:
                 return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
-            if "-u" in tokens:
+            if any(t.startswith("-u") for t in tokens):
                 logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
                 return False
 
