@@ -61,6 +61,7 @@ class GitActionGuard:
     Intercepts and validates Git commands before execution.
     """
     PROTECTED_BRANCHES = ["main", "master", "production"]
+    REMOTE_PROGRAM_SELECTOR_OPTIONS = ("--upload-pack", "--receive-pack", "--exec")
 
     def __init__(self, monitor: GitStateMonitor):
         self.monitor = monitor
@@ -121,12 +122,19 @@ class GitActionGuard:
 
         # Check for remote execution injection
         for token in tokens:
-            if token.startswith("--upload-pack") or token.startswith("--receive-pack"):
-                logger.warning(f"BLOCKED: Remote pack execution is not allowed '{command}'")
+            lowered_token = token.lower()
+            if any(
+                lowered_token == opt or lowered_token.startswith(f"{opt}=")
+                for opt in self.REMOTE_PROGRAM_SELECTOR_OPTIONS
+            ):
+                logger.warning(f"BLOCKED: Remote program selector option is not allowed '{command}'")
                 return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
-            if "-u" in tokens:
+            if any(
+                tok == "-u" or (tok.startswith("-u") and not tok.startswith("--"))
+                for tok in tokens
+            ):
                 logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
                 return False
 

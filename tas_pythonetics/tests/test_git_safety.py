@@ -96,3 +96,29 @@ def test_guard_blocks_process_substitution():
     assert guard.authorize_command("git add >(tee log.txt)") is False
     assert guard.authorize_command("git push origin $(echo main)") is False
     assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
+
+@pytest.mark.parametrize("command", [
+    "git push --receive-pack=/tmp/git-receive-pack origin feature-branch",
+    "git push --receive-pack /tmp/git-receive-pack origin feature-branch",
+    "git push --exec=/tmp/git-receive-pack origin feature-branch",
+    "git push --exec /tmp/git-receive-pack origin feature-branch",
+    "git fetch --upload-pack=/tmp/git-upload-pack origin main",
+    "git fetch --upload-pack /tmp/git-upload-pack origin main",
+    "git clone --upload-pack=/tmp/git-upload-pack https://example.com/repo.git",
+    "git clone --upload-pack /tmp/git-upload-pack https://example.com/repo.git",
+    "git clone -u /tmp/git-upload-pack https://example.com/repo.git",
+    "git clone -u/tmp/git-upload-pack https://example.com/repo.git",
+])
+def test_guard_blocks_remote_program_selectors(command):
+    monitor = GitStateMonitor()
+    monitor.get_current_branch = MagicMock(return_value="feature-branch")
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command(command) is False
+
+def test_guard_allows_legitimate_remote_operations():
+    monitor = GitStateMonitor()
+    monitor.get_current_branch = MagicMock(return_value="feature-branch")
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git push origin feature-branch") is True
+    assert guard.authorize_command("git fetch origin main") is True
+    assert guard.authorize_command("git clone https://example.com/repo.git") is True
