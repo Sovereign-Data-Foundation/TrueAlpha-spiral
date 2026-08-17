@@ -112,6 +112,22 @@ class GitActionGuard:
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
+        # Check all options for dangerous config injections and external command flags.
+        # Note: We must be careful not to block valid uses of '-c' in subcommands
+        # (e.g., `git switch -c branch`).
+        for i in range(1, len(tokens)):
+            token = tokens[i]
+            if token.startswith("--config") or token.startswith("--ext-cmd"):
+                logger.warning(f"BLOCKED: Dangerous configuration injection '{token}'")
+                return False
+
+            # `git clone` accepts `-c` strictly for injecting config values.
+            if subcommand_idx != -1 and i > subcommand_idx:
+                subcmd = tokens[subcommand_idx].lower()
+                if subcmd == "clone" and token.startswith("-c"):
+                    logger.warning(f"BLOCKED: Dangerous configuration injection in clone '{token}'")
+                    return False
+
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
             return False
