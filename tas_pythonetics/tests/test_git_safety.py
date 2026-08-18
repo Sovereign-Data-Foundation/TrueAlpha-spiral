@@ -73,6 +73,11 @@ def test_guard_blocks_dangerous_global_options():
     assert guard.authorize_command("git log -p") is True
     assert guard.authorize_command("git --config-env=core.pager=PAGER_ENV status") is False
 
+    # Options should be blocked even after subcommands
+    assert guard.authorize_command("git clone -c core.pager=calc url") is False
+    assert guard.authorize_command("git clone --config core.pager=calc url") is False
+    assert guard.authorize_command("git difftool --ext-cmd=calc") is False
+
 def test_guard_blocks_remote_pack_execution():
     monitor = GitStateMonitor()
     guard = GitActionGuard(monitor)

@@ -100,11 +100,18 @@ class GitActionGuard:
             else:
                 i += 1
 
-        # Check global options before the subcommand
-        end_idx = subcommand_idx if subcommand_idx != -1 else len(tokens)
-        for i in range(1, end_idx):
+        # Check all options for dangerous flags, including those after the subcommand
+        for i in range(1, len(tokens)):
             token = tokens[i]
+
+            if token.lower().startswith("-p"):
+                # -p is a dangerous global option (--paginate), but a safe flag for `git log -p` and `git diff -p`
+                if subcommand_idx != -1 and i > subcommand_idx and tokens[subcommand_idx].lower() in ("log", "diff", "show"):
+                    continue
+
             if (token.startswith("-c") or
+                token.startswith("--config") or
+                token.startswith("--ext-cmd") or
                 token.startswith("--exec-path") or
                 token == "--paginate" or
                 token.startswith("--config-env") or
