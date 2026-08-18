@@ -70,6 +70,10 @@ class GitActionGuard:
         Check if a command is safe to execute given the current state.
         Uses shlex to properly parse the command line.
         """
+        if any(marker in command for marker in ('<(', '>(', '$(', chr(96))):
+            logger.warning(f"BLOCKED: Process or command substitution syntax not allowed '{command}'")
+            return False
+
         try:
             tokens = shlex.split(command)
         except ValueError:
@@ -83,12 +87,47 @@ class GitActionGuard:
             logger.warning(f"BLOCKED: Non-git command '{command}'")
             return False
 
+        # Locate the subcommand index
+        subcommand_idx = -1
+        i = 1
+        while i < len(tokens):
+            if not tokens[i].startswith("-"):
+                subcommand_idx = i
+                break
+            # Skip argument for some common global options that take a value
+            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                i += 2
+            else:
+                i += 1
+
+        # Check global options before the subcommand
+        end_idx = subcommand_idx if subcommand_idx != -1 else len(tokens)
+        for i in range(1, end_idx):
+            token = tokens[i]
+            if (token.startswith("-c") or
+                token.startswith("--exec-path") or
+                token == "--paginate" or
+                token.startswith("--config-env") or
+                token.lower().startswith("-p")):
+                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                return False
+
+        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
+            logger.warning(f"BLOCKED: git config is not allowed '{command}'")
+            return False
+
         # Normalize tokens to lowercase for checking commands/flags
         lower_tokens = {t.lower() for t in tokens}
 
-        for token in lower_tokens:
-            if token == "-c" or token.startswith("--exec-path") or token == "--paginate":
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+        # Check for remote execution injection
+        for token in tokens:
+            if token.startswith("--upload-pack") or token.startswith("--receive-pack"):
+                logger.warning(f"BLOCKED: Remote pack execution is not allowed '{command}'")
+                return False
+
+        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "clone":
+            if any(t.startswith("-u") for t in tokens):
+                logger.warning(f"BLOCKED: Remote pack execution via -u is not allowed for clone '{command}'")
                 return False
 
         # Check for rebase

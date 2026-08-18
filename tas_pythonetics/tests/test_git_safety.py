@@ -64,8 +64,22 @@ def test_guard_blocks_dangerous_global_options():
     monitor = GitStateMonitor()
     guard = GitActionGuard(monitor)
     assert guard.authorize_command("git -c core.pager=calc status") is False
+    assert guard.authorize_command("git -ccore.pager=calc status") is False
     assert guard.authorize_command("git --exec-path=/tmp status") is False
     assert guard.authorize_command("git --paginate status") is False
+    assert guard.authorize_command("git config core.pager calc") is False
+    assert guard.authorize_command("git -p status") is False
+    assert guard.authorize_command("git -pstatus") is False
+    assert guard.authorize_command("git log -p") is True
+    assert guard.authorize_command("git --config-env=core.pager=PAGER_ENV status") is False
+
+def test_guard_blocks_remote_pack_execution():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git clone --upload-pack=calc git://a") is False
+    assert guard.authorize_command("git clone --receive-pack=calc git://a") is False
+    assert guard.authorize_command("git clone -u calc git://a") is False
+    assert guard.authorize_command("git clone -ucalc git://a") is False
 
 def test_guard_blocks_complex_force_pushes():
     monitor = GitStateMonitor()
@@ -84,3 +98,11 @@ def test_guard_allows_safe_plus_in_other_commands():
 
     # Adding a file with + in name should be allowed
     assert guard.authorize_command("git add +filename.txt") is True
+
+def test_guard_blocks_process_substitution():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    assert guard.authorize_command("git push origin <(echo main)") is False
+    assert guard.authorize_command("git add >(tee log.txt)") is False
+    assert guard.authorize_command("git push origin $(echo main)") is False
+    assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False

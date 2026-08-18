@@ -53,7 +53,7 @@ POSIX_KEYWORDS = {
     'if', 'then', 'else', 'elif', 'fi', 'while', 'for', 'in', 'do', 'done', 'case', 'esac', '!', '{', '}'
 }
 
-_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\|)')
+_OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||(?<![>&])&(?!>))')
 
 def _split_operators(tokens):
     """Re-tokenize shlex tokens so embedded operators are separate tokens.
@@ -76,6 +76,9 @@ def validate_script(script):
     if '$(' in script or '`' in script:
         return False, "Subshells are blocked"
 
+    if '<(' in script or '>(' in script:
+        return False, "Process substitution is blocked"
+
     lines = script.splitlines()
     for line in lines:
         line = line.strip()
@@ -92,10 +95,10 @@ def validate_script(script):
 
         tokens = _split_operators(tokens)
 
-        # Simple tokenizer to split by operators like ;, &&, ||, |
+        # Simple tokenizer to split by operators like ;, &&, ||, |, &
         cmd_tokens = []
         for token in tokens:
-            if token in (';', '&&', '||', '|'):
+            if token in (';', '&&', '||', '|', '&'):
                 if cmd_tokens:
                     cmd_name = cmd_tokens[0]
                     if '=' in cmd_name:
@@ -109,6 +112,13 @@ def validate_script(script):
                             return False, f"Unauthorized command: {cmd_name}"
                         else:
                             return False, "Unauthorized path-based execution"
+                    if cmd_name in ('bash', 'python', 'python3'):
+                        for token_arg in cmd_tokens[1:]:
+                            if token_arg in ('-c', '-m'):
+                                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                            if token_arg.startswith('-') and not token_arg.startswith('--'):
+                                if 'c' in token_arg or 'm' in token_arg:
+                                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
@@ -126,6 +136,13 @@ def validate_script(script):
                     return False, f"Unauthorized command: {cmd_name}"
                 else:
                     return False, "Unauthorized path-based execution"
+            if cmd_name in ('bash', 'python', 'python3'):
+                for token_arg in cmd_tokens[1:]:
+                    if token_arg in ('-c', '-m'):
+                        return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    if token_arg.startswith('-') and not token_arg.startswith('--'):
+                        if 'c' in token_arg or 'm' in token_arg:
+                            return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
 
     print("Generated Script:\n")
     print(script)

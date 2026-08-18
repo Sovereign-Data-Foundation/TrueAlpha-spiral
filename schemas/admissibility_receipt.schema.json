@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdf.local/schemas/admissibility_receipt.schema.json",
+  "title": "SDF Execution Receipt",
+  "type": "object",
+  "required": [
+    "receipt_type",
+    "receipt_id",
+    "origin_id",
+    "action_requested",
+    "action_authorized",
+    "state_changed",
+    "parent_hash",
+    "transition_hash",
+    "witness_hash",
+    "timestamp_utc",
+    "admissibility_result",
+    "admissibility_gate",
+    "required_invariants",
+    "failed_invariants",
+    "receipt_hash"
+  ],
+  "properties": {
+    "receipt_type": {"const": "execution"},
+    "receipt_id": {"type": "string", "pattern": "^sdf-exec-"},
+    "origin_id": {"type": "string"},
+    "action_requested": {"type": "array", "items": {"type": "string"}},
+    "action_authorized": {"const": true},
+    "state_changed": {"type": "boolean"},
+    "tools_invoked": {"type": "array"},
+    "parent_hash": {"type": "string", "pattern": "^sha256:"},
+    "transition_hash": {"type": "string", "pattern": "^sha256:"},
+    "witness_hash": {"type": "string", "pattern": "^sha256:"},
+    "timestamp_utc": {"type": "string"},
+    "admissibility_result": {"const": "accepted"},
+    "admissibility_gate": {"type": "string"},
+    "required_invariants": {"type": "array", "items": {"type": "string"}},
+    "failed_invariants": {"type": "array", "maxItems": 0},
+    "receipt_hash": {"type": "string", "pattern": "^sha256:"}
+  },
+  "additionalProperties": true
+}
