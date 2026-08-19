@@ -23,6 +23,7 @@ The SDF public-utility framing is distributed across four documents, each owning
 | **Singularity context** | [TrueAlpha-singularity.md](./TrueAlpha-singularity.md) | Convergence model, Ethical Hamiltonian, and civic instantiation logic. |
 | **API contract** | [API_REFERENCE.md](./API_REFERENCE.md) | Runtime primitives and the SDF Micro-Kernel interface, with `*(planned; not yet implemented)*` markers where applicable. |
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
+| **IOC claim boundary** | [IOC_CLAIM_MANIFEST.md](./IOC_CLAIM_MANIFEST.md) | Frozen, status-labeled claims for the PR #49 baseline, with recomputation steps and explicitly deferred obligations. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
