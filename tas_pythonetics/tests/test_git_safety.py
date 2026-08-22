@@ -106,3 +106,48 @@ def test_guard_blocks_process_substitution():
     assert guard.authorize_command("git add >(tee log.txt)") is False
     assert guard.authorize_command("git push origin $(echo main)") is False
     assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
+
+def test_guard_blocks_dangerous_options_post_subcommand():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    # Check that post-subcommand options are blocked
+    assert guard.authorize_command("git clone -c core.pager=calc origin") is False
+    assert guard.authorize_command("git clone --config core.pager=calc origin") is False
+    assert guard.authorize_command("git difftool --ext-cmd=calc") is False
+    assert guard.authorize_command("git clone --config-env=core.pager=PAGER origin") is False
+
+    # Check that -p is allowed only for log, diff, show
+    assert guard.authorize_command("git log -p") is True
+    assert guard.authorize_command("git diff -p") is True
+    assert guard.authorize_command("git show -p") is True
+
+    # Check that -p is blocked for other subcommands
+    assert guard.authorize_command("git status -p") is False
+    assert guard.authorize_command("git init -p") is False
+
+
+def test_guard_allows_safe_c_and_p():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+
+    # Safe -c uses
+    assert guard.authorize_command("git switch -c new_branch") is True
+    assert guard.authorize_command("git checkout -c new_branch") is True
+    assert guard.authorize_command("git commit -c HEAD") is True
+
+    # Safe -p uses
+    assert guard.authorize_command("git add -p") is True
+    assert guard.authorize_command("git commit -p") is True
+    assert guard.authorize_command("git checkout -p") is True
+    assert guard.authorize_command("git reset -p") is True
+    assert guard.authorize_command("git stash -p") is True
+
+def test_guard_allows_safe_long_options_starting_with_c_p():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+
+    # Safe --c and --p uses
+    assert guard.authorize_command("git rm --cached") is True
+    assert guard.authorize_command("git status --porcelain") is True
+    assert guard.authorize_command("git branch --contains") is True
+    assert guard.authorize_command("git merge --continue") is True

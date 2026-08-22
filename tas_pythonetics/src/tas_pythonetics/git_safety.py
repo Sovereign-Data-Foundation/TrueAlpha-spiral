@@ -100,17 +100,53 @@ class GitActionGuard:
             else:
                 i += 1
 
-        # Check global options before the subcommand
-        end_idx = subcommand_idx if subcommand_idx != -1 else len(tokens)
-        for i in range(1, end_idx):
+        subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else ""
+
+        # Check for dangerous options. Note: we need to handle '-c' and '-p' carefully
+        # so we don't break valid commands like 'git switch -c new_branch' or 'git commit -p'
+        for i in range(1, len(tokens)):
             token = tokens[i]
-            if (token.startswith("-c") or
+
+            # Global options that should NEVER appear (like --exec-path, --config-env, --ext-cmd)
+            if (token.startswith("--config-env") or
                 token.startswith("--exec-path") or
-                token == "--paginate" or
-                token.startswith("--config-env") or
-                token.lower().startswith("-p")):
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                token.startswith("--ext-cmd")):
+                logger.warning(f"BLOCKED: Dangerous option '{token}'")
                 return False
+
+            # '--config' can be used safely in some contexts, but not as a global arg for clone
+            if token.startswith("--config"):
+                logger.warning(f"BLOCKED: Dangerous option '{token}'")
+                return False
+
+            # '-c' is a valid argument for 'switch', 'checkout', 'commit', etc.
+            # but is DANGEROUS as a global option (config injection).
+            # We must be careful not to block valid flags like --cached or --continue
+            if token == "-c" or token.startswith("-c=") or token.startswith("-c"):
+                # Make sure we only catch -c and its immediate concatenated values
+                # (e.g. -ccore.pager=...) and NOT --cached.
+                if not token.startswith("--") and (token == "-c" or token.startswith("-c")):
+                    # If it's a global option (before subcommand), it's always blocked
+                    if i < subcommand_idx or subcommand_idx == -1:
+                        logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                        return False
+
+                    # If it's after the subcommand, it's safe for certain commands
+                    if subcommand not in ("switch", "checkout", "commit", "submodule"):
+                        logger.warning(f"BLOCKED: Dangerous option '{token}' for subcommand '{subcommand}'")
+                        return False
+
+            # '-p' or '--paginate'
+            if token == "--paginate" or (not token.startswith("--") and token.lower().startswith("-p")):
+                # Always blocked as global option
+                if i < subcommand_idx or subcommand_idx == -1:
+                     logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                     return False
+
+                # Allowed for these subcommands
+                if subcommand not in ("log", "diff", "show", "add", "commit", "checkout", "reset", "stash"):
+                    logger.warning(f"BLOCKED: Dangerous pagination option '{token}' for subcommand '{subcommand}'")
+                    return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")

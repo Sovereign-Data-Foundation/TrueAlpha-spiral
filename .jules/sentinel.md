@@ -45,3 +45,8 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block remote repository execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone), allowing command execution when connecting to a remote.
 **Learning:** Command line utilities that connect to remote endpoints can often execute arbitrary binaries via options that specify the protocol handlers. These can be abused to run local arbitrary commands.
 **Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) when wrapping remote-capable command-line tools.
+
+## 2026-04-03 - [Command Injection via Post-Subcommand Options]
+**Vulnerability:** Command injection in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` only validated dangerous flags (like `-c`, `--ext-cmd`) if they appeared before the subcommand. Attackers could bypass this by placing the flags after the subcommand (e.g., `git clone -c core.pager=calc origin`).
+**Learning:** Argument filtering must consider all token positions for utilities that allow options both globally and at the subcommand level, while remaining context-aware to avoid breaking legitimate usage (e.g., `git switch -c`).
+**Prevention:** Check for dangerous options across all tokens, explicitly validating the subcommand context when safe flags overlap with dangerous global config options.
