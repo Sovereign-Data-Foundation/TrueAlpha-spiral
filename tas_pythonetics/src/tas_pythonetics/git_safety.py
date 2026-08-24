@@ -100,6 +100,8 @@ class GitActionGuard:
             else:
                 i += 1
 
+        subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else None
+
         # Check global options before the subcommand
         end_idx = subcommand_idx if subcommand_idx != -1 else len(tokens)
         for i in range(1, end_idx):
@@ -111,6 +113,21 @@ class GitActionGuard:
                 token.lower().startswith("-p")):
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
+
+        # Check options anywhere in the command
+        for i in range(1, len(tokens)):
+            token = tokens[i]
+            if token.startswith("--config") or token.startswith("--ext-cmd") or token.startswith("--exec-path") or token.startswith("--config-env") or token == "--paginate":
+                logger.warning(f"BLOCKED: Dangerous option '{token}'")
+                return False
+            if token.startswith("-c") and i > subcommand_idx:
+                if subcommand not in ("switch", "checkout", "commit"):
+                    logger.warning(f"BLOCKED: Dangerous option '{token}'")
+                    return False
+            if token.lower().startswith("-p") and i > subcommand_idx:
+                if subcommand not in ("log", "diff", "show"):
+                    logger.warning(f"BLOCKED: Dangerous option '{token}'")
+                    return False
 
         if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
