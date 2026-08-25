@@ -106,3 +106,24 @@ def test_guard_blocks_process_substitution():
     assert guard.authorize_command("git add >(tee log.txt)") is False
     assert guard.authorize_command("git push origin $(echo main)") is False
     assert guard.authorize_command(f"git push origin {chr(96)}echo main{chr(96)}") is False
+
+def test_guard_blocks_dangerous_options_after_subcommand():
+    monitor = GitStateMonitor()
+    guard = GitActionGuard(monitor)
+    # Should block dangerous options anywhere
+    assert guard.authorize_command("git clone --exec-path=/tmp git://a") is False
+    assert guard.authorize_command("git log --ext-cmd=calc") is False
+    assert guard.authorize_command("git clone --config core.pager=calc git://a") is False
+    assert guard.authorize_command("git clone -c core.pager=calc git://a") is False
+
+    # Should allow safe subcommand arguments
+    assert guard.authorize_command("git switch -c new_branch") is True
+    assert guard.authorize_command("git checkout -c new_branch") is True
+    assert guard.authorize_command("git commit -c HEAD") is True
+    assert guard.authorize_command("git log -p") is True
+
+    # But should block global options before safe subcommands
+    assert guard.authorize_command("git -c core.pager=calc switch -c new_branch") is False
+
+if __name__ == "__main__":
+    pytest.main(["-v", "test_fix.py"])

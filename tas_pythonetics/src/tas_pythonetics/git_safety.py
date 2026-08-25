@@ -100,19 +100,36 @@ class GitActionGuard:
             else:
                 i += 1
 
-        # Check global options before the subcommand
-        end_idx = subcommand_idx if subcommand_idx != -1 else len(tokens)
-        for i in range(1, end_idx):
-            token = tokens[i]
-            if (token.startswith("-c") or
-                token.startswith("--exec-path") or
+        subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else None
+
+        # Check for dangerous global options anywhere in the command
+        for i, token in enumerate(tokens):
+            # Block global options anywhere
+            if (token.startswith("--exec-path") or
                 token == "--paginate" or
                 token.startswith("--config-env") or
-                token.lower().startswith("-p")):
-                logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                token.startswith("--ext-cmd")):
+                logger.warning(f"BLOCKED: Dangerous option '{token}'")
                 return False
 
-        if subcommand_idx != -1 and tokens[subcommand_idx].lower() == "config":
+            # -c / --config require context
+            if token.startswith("-c") or token.startswith("--config"):
+                # if before subcommand, it's definitely a global option
+                if subcommand_idx == -1 or i < subcommand_idx:
+                    logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                    return False
+                # if after subcommand, it might be a valid argument to switch/checkout/commit
+                elif subcommand not in ("switch", "checkout", "commit"):
+                    logger.warning(f"BLOCKED: Dangerous option '{token}' after subcommand '{subcommand}'")
+                    return False
+
+            # -p / -P require context
+            if token.lower().startswith("-p"):
+                if subcommand_idx == -1 or i < subcommand_idx:
+                    logger.warning(f"BLOCKED: Dangerous global option '{token}'")
+                    return False
+
+        if subcommand == "config":
             logger.warning(f"BLOCKED: git config is not allowed '{command}'")
             return False
 
