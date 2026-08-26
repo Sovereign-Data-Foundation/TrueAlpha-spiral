@@ -45,3 +45,7 @@
 **Vulnerability:** Arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block remote repository execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone), allowing command execution when connecting to a remote.
 **Learning:** Command line utilities that connect to remote endpoints can often execute arbitrary binaries via options that specify the protocol handlers. These can be abused to run local arbitrary commands.
 **Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) when wrapping remote-capable command-line tools.
+## 2024-05-18 - [Fix Git Command Injection Filter Bypass]
+**Vulnerability:** Git argument injection vulnerability where malicious global options like `-c core.pager=evil` could be passed to subcommands (e.g., `git clone`) because the filter only checked for these options *before* the subcommand.
+**Learning:** Git executes global configuration flags (like `-c`, `--exec-path`, `--config-env`) regardless of where they are placed in the argument order (before or after the subcommand). Parsing routines assuming order can easily be bypassed by malicious input.
+**Prevention:** When validating subprocess execution, apply denylists and sanitization filters across *all* arguments unless you strictly mandate a positional parsing schema and reject any extraneous input.
