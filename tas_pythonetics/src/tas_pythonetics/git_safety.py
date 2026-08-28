@@ -108,7 +108,7 @@ class GitActionGuard:
             if (token.startswith("--ext-cmd") or
                 token.startswith("--exec-path") or
                 token.startswith("--config-env") or
-                token == "--config" or
+                token.startswith("--config") or
                 token == "--paginate" or
                 (subcommand_idx == -1 and token.lower().startswith("-p")) or
                 (i < subcommand_idx and token.lower().startswith("-p"))):

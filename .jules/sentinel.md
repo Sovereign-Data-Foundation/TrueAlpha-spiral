@@ -49,3 +49,7 @@
 **Vulnerability:** Git argument injection vulnerability where malicious global options like `-c core.pager=evil` could be passed to subcommands (e.g., `git clone`) because the filter only checked for these options *before* the subcommand.
 **Learning:** Git executes global configuration flags (like `-c`, `--exec-path`, `--config-env`) regardless of where they are placed in the argument order (before or after the subcommand). Parsing routines assuming order can easily be bypassed by malicious input.
 **Prevention:** When validating subprocess execution, apply denylists and sanitization filters across *all* arguments unless you strictly mandate a positional parsing schema and reject any extraneous input.
+## 2024-05-18 - Git config bypass vulnerability
+**Vulnerability:** Git wrapper `GitActionGuard` could be bypassed via `--config=core.pager=!sh` argument format.
+**Learning:** `git` arguments can use `=` to bypass exact match string checks. `--config` was checked via `token == "--config"` rather than `token.startswith("--config")`.
+**Prevention:** Use `.startswith()` instead of exact matching for dangerous global flags when parsing command tokens.
