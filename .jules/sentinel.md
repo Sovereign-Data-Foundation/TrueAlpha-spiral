@@ -49,3 +49,8 @@
 **Vulnerability:** Git argument injection vulnerability where malicious global options like `-c core.pager=evil` could be passed to subcommands (e.g., `git clone`) because the filter only checked for these options *before* the subcommand.
 **Learning:** Git executes global configuration flags (like `-c`, `--exec-path`, `--config-env`) regardless of where they are placed in the argument order (before or after the subcommand). Parsing routines assuming order can easily be bypassed by malicious input.
 **Prevention:** When validating subprocess execution, apply denylists and sanitization filters across *all* arguments unless you strictly mandate a positional parsing schema and reject any extraneous input.
+
+## 2024-08-29 - [Fix command injection bypass via "=" syntax in GitActionGuard]
+**Vulnerability:** Command injection/arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block dangerous global configuration options like `--config` and `--paginate` when passed using `=` syntax (e.g., `--config=core.pager=!echo pwned`).
+**Learning:** Checking arguments for exact equality (`token == "--config"`) is insufficient when options support `=` syntax in POSIX utilities. The parser was successfully bypassed by combining the key and value into a single token that did not exact-match the blocked keys.
+**Prevention:** Use `.startswith()` checks for any CLI arguments that can optionally accept values via the `=` delimiter.
