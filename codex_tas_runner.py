@@ -119,6 +119,16 @@ def validate_script(script):
                             if token_arg.startswith('-') and not token_arg.startswith('--'):
                                 if 'c' in token_arg or 'm' in token_arg:
                                     return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    elif cmd_name == 'git':
+                        if len(cmd_tokens) > 1 and cmd_tokens[1] == 'config':
+                            return False, "Unauthorized subcommand 'config' for git"
+                        for i, token_arg in enumerate(cmd_tokens[1:], start=1):
+                            if token_arg.startswith('--exec-path') or token_arg.startswith('--config-env') or token_arg.startswith('--extcmd') or token_arg.startswith('--ext-cmd') or token_arg.startswith('-x') or token_arg.startswith('--paginate') or token_arg.startswith('--config'):
+                                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                            if token_arg.startswith('-c'):
+                                # Allow -c as a subcommand argument for safe subcommands like switch, checkout, commit, log, grep, diff, but NOT clone
+                                if not (len(cmd_tokens) > 2 and cmd_tokens[1] in ('switch', 'checkout', 'commit', 'log', 'grep', 'diff') and i > 1):
+                                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
@@ -142,6 +152,16 @@ def validate_script(script):
                         return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
                     if token_arg.startswith('-') and not token_arg.startswith('--'):
                         if 'c' in token_arg or 'm' in token_arg:
+                            return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            elif cmd_name == 'git':
+                if len(cmd_tokens) > 1 and cmd_tokens[1] == 'config':
+                    return False, "Unauthorized subcommand 'config' for git"
+                for i, token_arg in enumerate(cmd_tokens[1:], start=1):
+                    if token_arg.startswith('--exec-path') or token_arg.startswith('--config-env') or token_arg.startswith('--extcmd') or token_arg.startswith('--ext-cmd') or token_arg.startswith('-x') or token_arg.startswith('--paginate') or token_arg.startswith('--config'):
+                        return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    if token_arg.startswith('-c'):
+                        # Allow -c as a subcommand argument for safe subcommands like switch, checkout, commit, log, grep, diff, but NOT clone
+                        if not (len(cmd_tokens) > 2 and cmd_tokens[1] in ('switch', 'checkout', 'commit', 'log', 'grep', 'diff') and i > 1):
                             return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
 
     print("Generated Script:\n")

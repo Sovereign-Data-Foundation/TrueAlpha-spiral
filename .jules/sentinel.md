@@ -58,3 +58,8 @@
 **Vulnerability:** Arbitrary command execution in `codex_tas_runner.py`. The `validate_script` function failed to explicitly block here-strings (`<<<`), allowing a malicious user to bypass the shell command validation logic and execute arbitrary commands (e.g., `bash <<< "echo pwned"`).
 **Learning:** Shell command validation that relies solely on explicit shell script tokenization is brittle to bash's alternative IO direction mechanisms, which might disguise payloads as string arguments or inputs rather than scripts on disk.
 **Prevention:** Always block explicit alternative shell I/O (like `<(`, `>(`, and `<<<`) unless necessary. If necessary, safely parse it into standard bash tokens recursively.
+
+## 2026-08-09 - [Command Injection via Git Global Options in Shell Executor]
+**Vulnerability:** Arbitrary command execution in `codex_tas_runner.py`. The `validate_script` function allowed execution of `git` commands but failed to restrict Git global configuration flags (`-c`, `--exec-path`, `--config-env`, `--ext-cmd`, `--paginate`, `--config`). This allowed command injection bypassing restrictions designed for shell executors (e.g. `git -c core.pager="!touch HACKED" log -1`).
+**Learning:** When validating and allowlisting binaries that wrap subprocess execution or extensible configurations (like `git`), you must treat them with the same level of scrutiny as execution binaries (like `bash` or `python`).
+**Prevention:** Explicitly block configuration-modifying options and remote execution vectors for any extensible command-line tools added to an allowlist.
