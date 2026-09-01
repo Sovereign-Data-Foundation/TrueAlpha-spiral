@@ -76,7 +76,7 @@ def validate_script(script):
     if '$(' in script or '`' in script:
         return False, "Subshells are blocked"
 
-    if '<(' in script or '>(' in script:
+    if '<(' in script or '>(' in script or '<<<' in script:
         return False, "Process substitution is blocked"
 
     lines = script.splitlines()

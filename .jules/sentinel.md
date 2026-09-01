@@ -54,3 +54,7 @@
 **Vulnerability:** Command injection/arbitrary command execution in `tas_pythonetics/src/tas_pythonetics/git_safety.py`. `GitActionGuard.authorize_command` failed to block dangerous global configuration options like `--config` and `--paginate` when passed using `=` syntax (e.g., `--config=core.pager=!echo pwned`).
 **Learning:** Checking arguments for exact equality (`token == "--config"`) is insufficient when options support `=` syntax in POSIX utilities. The parser was successfully bypassed by combining the key and value into a single token that did not exact-match the blocked keys.
 **Prevention:** Use `.startswith()` checks for any CLI arguments that can optionally accept values via the `=` delimiter.
+## 2024-08-31 - [Fix command injection bypass via here-strings in script validation]
+**Vulnerability:** Arbitrary command execution in `codex_tas_runner.py`. The `validate_script` function failed to explicitly block here-strings (`<<<`), allowing a malicious user to bypass the shell command validation logic and execute arbitrary commands (e.g., `bash <<< "echo pwned"`).
+**Learning:** Shell command validation that relies solely on explicit shell script tokenization is brittle to bash's alternative IO direction mechanisms, which might disguise payloads as string arguments or inputs rather than scripts on disk.
+**Prevention:** Always block explicit alternative shell I/O (like `<(`, `>(`, and `<<<`) unless necessary. If necessary, safely parse it into standard bash tokens recursively.
