@@ -3,10 +3,17 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from sdf_evidence_envelope import build_envelope
-from tas0x import AgentSnapshot, CommitResult, TAS0XAgent, ToolBinding
+from tas0x import (
+    AgentSnapshot,
+    CommitResult,
+    RuntimeHalted,
+    TAS0XAgent,
+    ToolBinding,
+)
 
 
 def h(text: str) -> str:
@@ -214,6 +221,56 @@ def test_lineage_parent_mismatch_refuses_before_effect():
     assert state.commits == commits_before
 
 
+def test_type_sensitive_claim_equality_rejects_true_vs_one():
+    agent, state, key = make_harness(
+        generator=lambda _request, _snapshot: {
+            "tool": "set_value",
+            "arguments": {"value": 1},
+        }
+    )
+
+    def type_confused_evidence(proposal, snapshot, _binding):
+        claim = {
+            "tool": proposal["tool"],
+            "arguments": {"value": True},
+        }
+        return build_envelope(
+            evidence_id="type-confused",
+            claim=claim,
+            issuer_authority_id=AUTHORITY,
+            issuer_private_key=key,
+            context=snapshot.context,
+            genesis_hash=snapshot.genesis_hash,
+            parent_hash=snapshot.lineage_head,
+            sequence=snapshot.sequence,
+            issued_at="2026-09-02T12:02:00Z",
+            nonce="type-confused-nonce",
+        )
+
+    agent._evidence_provider = type_confused_evidence
+    result = agent.step("type confusion")
+
+    assert result.status == "REFUSED"
+    assert result.delta_s == 0
+    assert result.failed_predicate == "claim_matches_proposal"
+    assert state.commits == 0
+
+
+def test_malformed_evidence_provider_fails_closed_with_witness():
+    agent, state, _ = make_harness()
+    agent._evidence_provider = lambda *_args: None
+    before = state.root
+
+    result = agent.step("malformed evidence")
+
+    assert result.status == "REFUSED"
+    assert result.delta_s == 0
+    assert result.failed_predicate == "evidence_available"
+    assert state.root == before
+    assert state.commits == 0
+    assert len(agent.witness) == 1
+
+
 def test_stale_snapshot_never_commits_agent_effect():
     agent, state, _ = make_harness()
     original_provider = agent._evidence_provider
@@ -233,8 +290,38 @@ def test_stale_snapshot_never_commits_agent_effect():
     assert result.state_root_after == state.root
 
 
-def test_unprovable_commit_halts_as_indeterminate_not_success():
+def test_successful_noop_commit_is_not_labeled_state_change():
     agent, state, _ = make_harness()
+
+    def noop_commit(_arguments, expected_root):
+        return CommitResult(True, expected_root)
+
+    old = agent._tools["set_value"]
+    agent._tools["set_value"] = ToolBinding(
+        name=old.name,
+        authority_scope=old.authority_scope,
+        invariant=old.invariant,
+        commit=noop_commit,
+    )
+    before = state.root
+
+    result = agent.step("no-op")
+
+    assert result.status == "CONFLICT"
+    assert result.delta_s == 0
+    assert result.receipt["detail_code"] == "no_state_change"
+    assert state.root == before
+    assert state.commits == 0
+
+
+def test_unprovable_commit_halts_runtime_until_external_reconciliation():
+    calls = {"generator": 0}
+
+    def generator(_request, _snapshot):
+        calls["generator"] += 1
+        return {"tool": "set_value", "arguments": {"value": 7}}
+
+    agent, state, _ = make_harness(generator=generator)
 
     def ambiguous_commit(_arguments, _expected_root):
         raise RuntimeError("transport vanished")
@@ -254,6 +341,15 @@ def test_unprovable_commit_halts_as_indeterminate_not_success():
     assert result.failed_predicate == "commit_proof"
     assert state.commits == 0
     assert len(agent.witness) == 1
+    assert agent.halted is True
+    assert agent.halt_reason is not None
+    assert calls["generator"] == 1
+
+    with pytest.raises(RuntimeHalted):
+        agent.step("must not continue")
+
+    assert calls["generator"] == 1
+    assert len(agent.witness) == 1
 
 
 def test_refusal_advances_evidentiary_lineage_without_state_change():
@@ -269,6 +365,34 @@ def test_refusal_advances_evidentiary_lineage_without_state_change():
     assert r1.sequence == 0
     assert r2.sequence == 1
     assert agent.sequence == 2
+
+
+def test_witness_records_are_isolated_from_sink_result_and_callers():
+    sink_records = []
+
+    def mutating_sink(record):
+        sink_records.append(record)
+        record["status"] = "CORRUPTED_BY_SINK"
+        record["proposal"]["arguments"]["value"] = 999
+
+    agent, state, _ = make_harness()
+    agent._witness_sink = mutating_sink
+
+    result = agent.step("commit")
+    result.receipt["status"] = "CORRUPTED_BY_RESULT"
+    result.receipt["proposal"]["arguments"]["value"] = 888
+
+    external_witness = agent.witness
+    external_witness[0]["status"] = "CORRUPTED_BY_CALLER"
+    external_witness[0]["proposal"]["arguments"]["value"] = 777
+
+    internal_again = agent.witness[0]
+    assert result.status == "ADMITTED"
+    assert state.commits == 1
+    assert sink_records[0]["status"] == "CORRUPTED_BY_SINK"
+    assert internal_again["status"] == "ADMITTED"
+    assert internal_again["proposal"]["arguments"]["value"] == 7
+    assert internal_again["terminal_hash"] == result.terminal_hash
 
 
 def test_witness_sink_failure_does_not_erase_terminal_result():
