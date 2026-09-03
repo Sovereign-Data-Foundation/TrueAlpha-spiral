@@ -17,7 +17,19 @@ except ImportError:
     PhoenixError = None
 
 def main():
-    parser = argparse.ArgumentParser(description="TAS CLI: TrueAlphaSpiral Toolkit")
+    epilog = (
+        "Examples:\n"
+        "  python tas_cli.py shadow-scan .        Scan current directory for unsequenced artifacts\n"
+        "  python tas_cli.py sequence <file>      Create TAS metadata for an artifact\n"
+        "  python tas_cli.py verify-identity <f>  Verify the .tasmeta.json sidecar anchor for a file\n"
+        "  python tas_cli.py vertical-slice <f>   Execute Authority -> Context -> Admission -> "
+        "Runtime -> Receipt/Refusal\n"
+    )
+    parser = argparse.ArgumentParser(
+        description="TAS CLI: TrueAlphaSpiral Toolkit",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=epilog,
+    )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # shadow-scan
@@ -25,15 +37,43 @@ def main():
     scan_parser.add_argument("path", nargs="?", default=".", help="Path to scan")
 
     # sequence
-    seq_parser = subparsers.add_parser("sequence", help="Perform Sequencing Ceremony on an artifact")
+    seq_parser = subparsers.add_parser(
+        "sequence",
+        help="Perform Sequencing Ceremony on an artifact: emit the matching .tasmeta.json sidecar",
+        description="Perform the TAS Sequencing Ceremony on a file: emit the matching .tasmeta.json sidecar.",
+    )
     seq_parser.add_argument("file", help="File to sequence")
-    seq_parser.add_argument("--seed", default=TAS_HUMAN_SIG, help="Human Seed ID")
-    seq_parser.add_argument("--genome", default="TAS_GENOME_V1", help="Genome ID")
+    seq_parser.add_argument(
+        "--seed",
+        default=TAS_HUMAN_SIG,
+        help="Human Seed ID used in the metadata (default: %(default)s)",
+    )
+    seq_parser.add_argument(
+        "--genome",
+        default="TAS_GENOME_V1",
+        help="Genome ID (default: %(default)s)",
+    )
 
     # verify-identity
-    verify_parser = subparsers.add_parser("verify-identity", help="Verify the Kinematic Identity (Prime Invariant) of a file")
+    verify_parser = subparsers.add_parser(
+        "verify-identity",
+        help="Verify the Kinematic Identity of a file against its .tasmeta.json sidecar anchor",
+        description="Verify the Kinematic Identity (Prime Invariant) of a file using the .tasmeta.json sidecar anchor.",
+    )
     verify_parser.add_argument("file", help="Path to file to verify")
     verify_parser.add_argument("--signature", default=TAS_HUMAN_SIG, help="Human Signature (Anchor)")
+
+    # vertical-slice
+    vs_parser = subparsers.add_parser(
+        "vertical-slice",
+        help="Execute Authority -> Context -> Admission -> Runtime -> Receipt/Refusal",
+        description=(
+            "Execute the full TAS vertical slice ceremony:\n"
+            "  Execute Authority -> Context -> Admission -> Runtime -> Receipt/Refusal\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    vs_parser.add_argument("file", help="Artifact file to run through the vertical slice")
 
     args = parser.parse_args()
 
@@ -76,6 +116,11 @@ def main():
         except Exception as e:
             print(f"\n[ERROR] An unexpected error occurred: {e}")
             sys.exit(1)
+
+    elif args.command == "vertical-slice":
+        print(f"Vertical slice ceremony for: {args.file}")
+        print("Execute Authority -> Context -> Admission -> Runtime -> Receipt/Refusal")
+        print("[INFO] Vertical slice not yet fully implemented.")
 
     else:
         parser.print_help()
