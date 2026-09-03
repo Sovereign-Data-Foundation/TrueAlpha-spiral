@@ -188,8 +188,9 @@ def admit_or_refuse(
         public_key)`` pairs.
     invariant_check:
         ``(proposal, state_root) → bool`` — caller-supplied system invariant.
-        Must not use the envelope to derive its return value; the separation
-        is the caller's responsibility.
+        Must return the literal boolean ``True`` to pass. Truthy non-boolean
+        values fail closed. Must not use the envelope to derive its return
+        value; the separation is the caller's responsibility.
     apply_transition:
         ``(proposal, state_root) → new_state_root`` — called only on admission.
         Must return a deterministic 64-char hex state root.
@@ -204,11 +205,18 @@ def admit_or_refuse(
     proposal_hash = _domain_hash(
         TAS_ADMISSION_DOMAIN, {"proposal": normalized_proposal}
     )
-    claim_matches_proposal = normalized_claim == normalized_proposal
+
+    # Compare the canonical encodings, not Python object equality. Python
+    # considers True == 1 and False == 0, but those are distinct JSON claims.
+    claim_matches_proposal = (
+        _canonical_json(normalized_claim) == _canonical_json(normalized_proposal)
+    )
 
     # Compute invariant pass BEFORE verification so the two checks remain
-    # independent; neither can influence the other's inputs.
-    inv = invariant_check(normalized_proposal, state_root)
+    # independent; neither can influence the other's inputs. Only literal True
+    # closes the predicate; Python truthiness is not admissibility.
+    invariant_result = invariant_check(normalized_proposal, state_root)
+    inv = invariant_result is True
 
     verdict = verify_evidence(
         envelope,
