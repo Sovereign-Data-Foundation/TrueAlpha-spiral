@@ -68,6 +68,7 @@ SAFE_SOURCE_TARGETS = {
 
 _ENV_ASSIGN_RE = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$')
 _SAFE_ENV_VALUE_RE = re.compile(r'^[a-zA-Z0-9_./:@%+,-]*$')
+_SAFE_GIT_CONTEXT_RE = re.compile(r'^[a-zA-Z0-9_.@%+,-]+(?:/[a-zA-Z0-9_.@%+,-]+)*$')
 _OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||(?<![>&])&(?!>))')
 
 
@@ -86,6 +87,13 @@ def _split_operators(tokens):
     return result
 
 
+def _safe_git_context_path(value):
+    """Permit only bounded relative paths for Git's global ``-C`` option."""
+    if not value or value.startswith('/') or not _SAFE_GIT_CONTEXT_RE.fullmatch(value):
+        return False
+    return all(part not in ('', '..') for part in value.split('/'))
+
+
 def validate_script(script):
     if not TAS_Heartproof(script):
         return False, "Unethical content detected"
@@ -95,6 +103,84 @@ def validate_script(script):
 
     if '<(' in script or '>(' in script or '<<<' in script:
         return False, "Process substitution is blocked"
+
+    def check_git(cmd_tokens):
+        safe_short_c_subcommands = {'switch', 'checkout', 'commit', 'log', 'grep', 'diff', 'show'}
+        blocked_globals = (
+            '--ext-cmd', '--extcmd', '--exec-path', '--config', '--config-env',
+            '--paginate', '--no-pager', '--git-dir', '--work-tree', '--namespace',
+            '--super-prefix',
+        )
+
+        args = cmd_tokens[1:]
+        index = 0
+        subcommand = None
+
+        # Parse the global-option region before identifying the subcommand.
+        # Value-bearing options must consume their value so it cannot be
+        # mistaken for the subcommand (e.g. ``git -C repo log -c``).
+        while index < len(args):
+            token = args[index]
+
+            for blocked in blocked_globals:
+                if token == blocked or token.startswith(blocked + '='):
+                    return False, f"Unauthorized git option '{token}'"
+
+            if token == '-c' or token.startswith('-c=') or (token.startswith('-c') and token != '-C'):
+                return False, f"Unauthorized git global option '{token}'"
+
+            if token == '-C':
+                if index + 1 >= len(args):
+                    return False, "Git -C requires a path"
+                context_path = args[index + 1]
+                if not _safe_git_context_path(context_path):
+                    return False, f"Unsafe git -C path '{context_path}'"
+                index += 2
+                continue
+
+            if token.startswith('-C') and token != '-C':
+                context_path = token[2:]
+                if not _safe_git_context_path(context_path):
+                    return False, f"Unsafe git -C path '{context_path}'"
+                index += 1
+                continue
+
+            if token == '--':
+                index += 1
+                if index >= len(args):
+                    return False, "Missing git subcommand"
+                subcommand = args[index]
+                index += 1
+                break
+
+            if token.startswith('-'):
+                # Unknown global options fail closed. Do not guess whether an
+                # unmodeled option consumes the following token.
+                return False, f"Unauthorized git global option '{token}'"
+
+            subcommand = token
+            index += 1
+            break
+
+        if subcommand is None:
+            return False, "Missing git subcommand"
+        if subcommand == 'config':
+            return False, "Unauthorized subcommand 'config' for git"
+
+        # Subcommand arguments are evaluated in subcommand context. Exact -c
+        # is permitted only where Git defines a non-configuration meaning.
+        for token_arg in args[index:]:
+            for blocked in blocked_globals:
+                if token_arg == blocked or token_arg.startswith(blocked + '='):
+                    return False, f"Unauthorized git option '{token_arg}'"
+
+            if token_arg == '-c':
+                if subcommand not in safe_short_c_subcommands:
+                    return False, f"Unauthorized git option '{token_arg}' for {subcommand}"
+            elif token_arg.startswith('-c'):
+                return False, f"Unauthorized git option '{token_arg}'"
+
+        return True, "Valid"
 
     def check_command(cmd_tokens):
         if not cmd_tokens:
@@ -139,31 +225,7 @@ def validate_script(script):
                         return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
 
         if cmd_name == 'git':
-            safe_short_c_subcommands = {'switch', 'checkout', 'commit', 'log', 'grep', 'diff', 'show'}
-            seen_subcommand = None
-            blocked_globals = (
-                '--ext-cmd', '--extcmd', '--exec-path', '--config', '--config-env',
-                '--paginate', '--no-pager',
-            )
-
-            for token_arg in cmd_tokens[1:]:
-                if not token_arg.startswith('-') and seen_subcommand is None:
-                    seen_subcommand = token_arg
-                    if seen_subcommand == 'config':
-                        return False, "Unauthorized subcommand 'config' for git"
-                    continue
-
-                for blocked in blocked_globals:
-                    if token_arg == blocked or token_arg.startswith(blocked + '='):
-                        return False, f"Unauthorized git option '{token_arg}'"
-
-                if token_arg == '-c':
-                    if seen_subcommand not in safe_short_c_subcommands:
-                        return False, f"Unauthorized git global option '{token_arg}'"
-                elif token_arg.startswith('-c'):
-                    # Reject attached/config-like forms everywhere. Safe uses of
-                    # -c after a subcommand are exact '-c' tokens.
-                    return False, f"Unauthorized git option '{token_arg}'"
+            return check_git(cmd_tokens)
 
         return True, "Valid"
 
