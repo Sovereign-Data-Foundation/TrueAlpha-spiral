@@ -53,7 +53,23 @@ POSIX_KEYWORDS = {
     'if', 'then', 'else', 'elif', 'fi', 'while', 'for', 'in', 'do', 'done', 'case', 'esac', '!', '{', '}'
 }
 
+# Environment mutation is itself a capability. The generated script may only
+# export variables whose semantics do not redirect code loading/execution.
+SAFE_EXPORT_VARS = {
+    'SOURCE_DATE_EPOCH',
+    'PYTHONUNBUFFERED',
+    'PIP_DISABLE_PIP_VERSION_CHECK',
+}
+
+SAFE_SOURCE_TARGETS = {
+    '.venv/bin/activate',
+    './.venv/bin/activate',
+}
+
+_ENV_ASSIGN_RE = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$')
+_SAFE_ENV_VALUE_RE = re.compile(r'^[a-zA-Z0-9_./:@%+,-]*$')
 _OPERATOR_RE = re.compile(r'(&&|\|\||[;]|\||(?<![>&])&(?!>))')
+
 
 def _split_operators(tokens):
     """Re-tokenize shlex tokens so embedded operators are separate tokens.
@@ -69,6 +85,7 @@ def _split_operators(tokens):
                 result.append(part)
     return result
 
+
 def validate_script(script):
     if not TAS_Heartproof(script):
         return False, "Unethical content detected"
@@ -83,22 +100,38 @@ def validate_script(script):
         if not cmd_tokens:
             return True, "Valid"
 
-        cmd_index = 0
-        while cmd_index < len(cmd_tokens) and re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*=', cmd_tokens[cmd_index]):
-            cmd_index += 1
+        # Do not silently skip VAR=value prefixes. Prefix assignments can alter
+        # PATH, BASH_ENV, PYTHONPATH, LD_PRELOAD, GIT_CONFIG_* and other process
+        # semantics before the allowlisted executable starts.
+        prefix = _ENV_ASSIGN_RE.match(cmd_tokens[0])
+        if prefix:
+            return False, f"Inline environment assignment is blocked: {prefix.group(1)}"
 
-        if cmd_index >= len(cmd_tokens):
-            return True, "Valid"
-
-        cmd_name = cmd_tokens[cmd_index]
+        cmd_name = cmd_tokens[0]
         if cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
             if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
                 return False, f"Unauthorized command: {cmd_name}"
-            else:
-                return False, "Unauthorized path-based execution"
+            return False, "Unauthorized path-based execution"
+
+        if cmd_name == 'export':
+            if len(cmd_tokens) == 1:
+                return False, "Bare export is blocked"
+            for token_arg in cmd_tokens[1:]:
+                match = _ENV_ASSIGN_RE.match(token_arg)
+                if not match:
+                    return False, f"Export must use NAME=value form: {token_arg}"
+                name, value = match.groups()
+                if name not in SAFE_EXPORT_VARS:
+                    return False, f"Unauthorized environment variable: {name}"
+                if not _SAFE_ENV_VALUE_RE.fullmatch(value):
+                    return False, f"Unsafe environment value for {name}"
+
+        if cmd_name == 'source':
+            if len(cmd_tokens) != 2 or cmd_tokens[1] not in SAFE_SOURCE_TARGETS:
+                return False, "Unauthorized source target"
 
         if cmd_name in ('bash', 'python', 'python3'):
-            for token_arg in cmd_tokens[cmd_index+1:]:
+            for token_arg in cmd_tokens[1:]:
                 if token_arg in ('-c', '-m'):
                     return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
                 if token_arg.startswith('-') and not token_arg.startswith('--'):
@@ -106,21 +139,31 @@ def validate_script(script):
                         return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
 
         if cmd_name == 'git':
-            safe_subcommands = {'switch', 'checkout', 'commit', 'log', 'grep'}
+            safe_short_c_subcommands = {'switch', 'checkout', 'commit', 'log', 'grep', 'diff', 'show'}
             seen_subcommand = None
-            blocked_globals = ('--ext-cmd', '--exec-path', '--config', '--config-env', '--paginate')
+            blocked_globals = (
+                '--ext-cmd', '--extcmd', '--exec-path', '--config', '--config-env',
+                '--paginate', '--no-pager',
+            )
 
-            for token_arg in cmd_tokens[cmd_index+1:]:
+            for token_arg in cmd_tokens[1:]:
                 if not token_arg.startswith('-') and seen_subcommand is None:
                     seen_subcommand = token_arg
+                    if seen_subcommand == 'config':
+                        return False, "Unauthorized subcommand 'config' for git"
+                    continue
 
-                for bg in blocked_globals:
-                    if token_arg == bg or token_arg.startswith(bg + '='):
+                for blocked in blocked_globals:
+                    if token_arg == blocked or token_arg.startswith(blocked + '='):
                         return False, f"Unauthorized git option '{token_arg}'"
 
-                if token_arg == '-c' or token_arg.startswith('-c='):
-                    if seen_subcommand not in safe_subcommands:
+                if token_arg == '-c':
+                    if seen_subcommand not in safe_short_c_subcommands:
                         return False, f"Unauthorized git global option '{token_arg}'"
+                elif token_arg.startswith('-c'):
+                    # Reject attached/config-like forms everywhere. Safe uses of
+                    # -c after a subcommand are exact '-c' tokens.
+                    return False, f"Unauthorized git option '{token_arg}'"
 
         return True, "Valid"
 
