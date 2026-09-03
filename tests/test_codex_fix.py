@@ -188,6 +188,8 @@ def test_git_global_execution_options_blocked():
         "git --ext-cmd=sh log -1",
         "git --config=core.pager='!id' log -1",
         "git config core.pager '!id'",
+        "git --work-tree repo log -1",
+        "git --git-dir repo/.git log -1",
     ):
         is_valid, msg = validate_script(script)
         assert not is_valid
@@ -206,3 +208,31 @@ def test_git_safe_short_c_only_after_known_subcommand():
     is_valid, msg = validate_script("git log -c=core.pager=evil")
     assert not is_valid
     assert "Unauthorized git option" in msg
+
+
+def test_git_value_bearing_global_option_does_not_become_subcommand():
+    for script in (
+        "git -C repo log -c -1",
+        "git -Crepo grep -c needle",
+        "git -C ./repo switch -c feature/test",
+    ):
+        is_valid, msg = validate_script(script)
+        assert is_valid, msg
+
+
+def test_git_context_path_is_bounded():
+    for script in (
+        "git -C /tmp log -1",
+        "git -C ../repo log -1",
+        "git -C repo/../../tmp log -1",
+        "git -C '~/repo' log -1",
+    ):
+        is_valid, msg = validate_script(script)
+        assert not is_valid
+        assert "git -C path" in msg
+
+
+def test_git_subcommand_cannot_inherit_global_config_semantics():
+    is_valid, msg = validate_script("git -C repo clone -c core.pager=evil origin")
+    assert not is_valid
+    assert "Unauthorized git option '-c' for clone" in msg
