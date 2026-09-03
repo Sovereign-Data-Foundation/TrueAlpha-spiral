@@ -58,3 +58,8 @@
 **Vulnerability:** Arbitrary command execution in `codex_tas_runner.py`. The `validate_script` function failed to explicitly block here-strings (`<<<`), allowing a malicious user to bypass the shell command validation logic and execute arbitrary commands (e.g., `bash <<< "echo pwned"`).
 **Learning:** Shell command validation that relies solely on explicit shell script tokenization is brittle to bash's alternative IO direction mechanisms, which might disguise payloads as string arguments or inputs rather than scripts on disk.
 **Prevention:** Always block explicit alternative shell I/O (like `<(`, `>(`, and `<<<`) unless necessary. If necessary, safely parse it into standard bash tokens recursively.
+
+## 2024-10-27 - [Fix git global option false positives in command filtering]
+**Vulnerability:** Safe use of subcommands with `-c` flag (e.g., `git log -c` or `git grep -c`) was blocked by `GitActionGuard` due to overly restrictive filtering of global options.
+**Learning:** Command line arguments in tools like Git often have context-dependent meanings. A `-c` argument behaves as a global configuration injector when placed before the subcommand, but acts as a safe, localized behavior modifier (like showing merge diffs in `log` or counting matches in `grep`) when placed after specific subcommands. Overly rigid argument checks create false positives that can break functionality or motivate users to bypass security measures.
+**Prevention:** Ensure command line sanitizers track position and subcommand context, explicitly allowing safe flag usage within the bounds of specific non-destructive subcommands.

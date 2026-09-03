@@ -116,7 +116,7 @@ class GitActionGuard:
                 return False
 
             if token.startswith("-c"):
-                if subcommand in ("switch", "checkout", "commit") and i > subcommand_idx:
+                if subcommand in ("switch", "checkout", "commit", "log", "grep") and i > subcommand_idx:
                     continue
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
