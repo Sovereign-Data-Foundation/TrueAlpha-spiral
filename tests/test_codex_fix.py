@@ -120,3 +120,23 @@ def test_redirection_with_ampersand_allowed():
     script = "python tas_agent.py --task 'self-test' &> audit.log"
     is_valid, msg = validate_script(script)
     assert is_valid, msg
+
+def test_multiple_environment_variables():
+    script = "FOO=1 BAR=2 baz"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized command" in msg
+
+    script = "A=1 bash -c 'echo 1'"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized execution option '-c' for bash" in msg
+
+    script = "A=1 B=2 C=3 bash"
+    is_valid, msg = validate_script(script)
+    assert is_valid, msg
+
+    script = "FOO=1 BAR=2 python3 -m http.server"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized execution option '-m' for python3" in msg
