@@ -63,3 +63,8 @@
 **Vulnerability:** Safe use of subcommands with `-c` flag (e.g., `git log -c` or `git grep -c`) was blocked by `GitActionGuard` due to overly restrictive filtering of global options.
 **Learning:** Command line arguments in tools like Git often have context-dependent meanings. A `-c` argument behaves as a global configuration injector when placed before the subcommand, but acts as a safe, localized behavior modifier (like showing merge diffs in `log` or counting matches in `grep`) when placed after specific subcommands. Overly rigid argument checks create false positives that can break functionality or motivate users to bypass security measures.
 **Prevention:** Ensure command line sanitizers track position and subcommand context, explicitly allowing safe flag usage within the bounds of specific non-destructive subcommands.
+
+## 2024-09-06 - [CRITICAL] Fix command injection via global option bypasses
+**Vulnerability:** Attackers could bypass command argument whitelisting by concatenating flags with values using equals signs (`-c=malicious_command`) or directly passing strings without spaces (`-cmalicious_command`).
+**Learning:** Argument parsing rules applied only strict exact matches on strings like `-c` and `-m`, failing to account for valid POSIX/GNU flag behaviors where arguments can be immediately adjacent to the flag or separated by an equals sign.
+**Prevention:** Command validators checking for blocked flags must always check for all standard variations: exact match `== "-flag"`, assignment prefix `.startswith("-flag=")`, and contiguous prefix `(token.startswith("-flag") and len(token) > len("-flag"))`.

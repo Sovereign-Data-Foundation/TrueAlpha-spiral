@@ -115,7 +115,7 @@ class GitActionGuard:
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
                 return False
 
-            if token.startswith("-c"):
+            if token == "-c" or token.startswith("-c=") or (token.startswith("-c") and len(token) > 2):
                 if subcommand in ("switch", "checkout", "commit", "log", "grep") and i > subcommand_idx:
                     continue
                 logger.warning(f"BLOCKED: Dangerous global option '{token}'")
