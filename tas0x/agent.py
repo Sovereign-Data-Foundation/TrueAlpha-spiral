@@ -35,14 +35,26 @@ class GeneratorPort(Protocol):
     def __call__(self, request: str, snapshot: "AgentSnapshot") -> Mapping[str, Any]: ...
 
 
+@dataclass(frozen=True)
+class EvidenceBinding:
+    """Metadata-only tool view exposed to the evidence provider.
+
+    This object deliberately carries no invariant callback, commit callback,
+    state mutation handle, or other effect-bearing capability.
+    """
+
+    name: str
+    authority_scope: FrozenSet[str]
+
+
 class EvidencePort(Protocol):
-    """Independent attestation source for a normalized proposal."""
+    """Independent attestation source for a detached normalized proposal."""
 
     def __call__(
         self,
         proposal: Mapping[str, Any],
         snapshot: "AgentSnapshot",
-        binding: "ToolBinding",
+        binding: EvidenceBinding,
     ) -> SDFEvidenceEnvelope: ...
 
 
@@ -198,7 +210,7 @@ class TAS0XAgent:
     Parameters are intentionally split by jurisdiction:
 
     * ``generator`` proposes JSON only.
-    * ``evidence_provider`` attests the exact normalized proposal.
+    * ``evidence_provider`` receives a detached proposal plus metadata only.
     * ``tools`` binds names to external authority scopes, invariants, and effects.
     * ``trusted_authority_keys`` is supplied independently of the proposal.
     * ``state_reader`` exposes the current protected-state root for CAS checks.
@@ -315,7 +327,9 @@ class TAS0XAgent:
             snapshot = self.snapshot()
 
             try:
-                proposal = self._normalize_proposal(self._generator(request, snapshot))
+                normalized = self._normalize_proposal(self._generator(request, snapshot))
+                sealed_proposal_bytes = _canonical_json(normalized)
+                sealed_proposal = json.loads(sealed_proposal_bytes.decode("utf-8"))
             except Exception as exc:
                 return self._local_terminal(
                     status="REFUSED",
@@ -327,30 +341,37 @@ class TAS0XAgent:
                     state_root_after=snapshot.state_root,
                 )
 
-            binding = self._tools.get(proposal["tool"])
+            binding = self._tools.get(sealed_proposal["tool"])
             if binding is None:
                 return self._local_terminal(
                     status="REFUSED",
                     delta_s=0,
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     failed_predicate="known_tool",
                     detail_code="unknown_tool",
                     state_root_after=snapshot.state_root,
                 )
 
+            evidence_binding = EvidenceBinding(
+                name=binding.name,
+                authority_scope=frozenset(binding.authority_scope),
+            )
+
             try:
-                envelope = self._evidence_provider(proposal, snapshot, binding)
+                envelope = self._evidence_provider(
+                    _clone(sealed_proposal), snapshot, evidence_binding
+                )
                 if not isinstance(envelope, SDFEvidenceEnvelope):
                     raise TypeError("evidence provider must return SDFEvidenceEnvelope")
                 lineage_ok = self._lineage_guard(envelope, snapshot)
-                claim_exact = _canonical_json(envelope.claim) == _canonical_json(proposal)
+                claim_exact = _canonical_json(envelope.claim) == sealed_proposal_bytes
             except Exception as exc:
                 return self._local_terminal(
                     status="REFUSED",
                     delta_s=0,
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     failed_predicate="evidence_available",
                     detail_code=type(exc).__name__,
                     state_root_after=snapshot.state_root,
@@ -363,7 +384,7 @@ class TAS0XAgent:
                     status="REFUSED",
                     delta_s=0,
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     failed_predicate="lineage_anchor",
                     detail_code="tas0x_lineage_mismatch",
                     state_root_after=snapshot.state_root,
@@ -376,7 +397,7 @@ class TAS0XAgent:
                     status="REFUSED",
                     delta_s=0,
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     failed_predicate="claim_matches_proposal",
                     detail_code="canonical_json_mismatch",
                     state_root_after=snapshot.state_root,
@@ -385,7 +406,7 @@ class TAS0XAgent:
                 )
 
             invariant_ok = self._safe_tool_invariant(
-                binding, proposal["arguments"], snapshot
+                binding, _clone(sealed_proposal["arguments"]), snapshot
             )
 
             # This predicate is intentionally envelope-independent.
@@ -394,12 +415,12 @@ class TAS0XAgent:
 
             def apply_transition(_proposal: Any, expected_root: str) -> str:
                 return self._compare_and_commit(
-                    binding, proposal["arguments"], expected_root
+                    binding, _clone(sealed_proposal["arguments"]), expected_root
                 )
 
             try:
                 outcome = admit_or_refuse(
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     envelope=envelope,
                     state_root=snapshot.state_root,
                     authority_scope=binding.authority_scope,
@@ -416,7 +437,7 @@ class TAS0XAgent:
                     status="CONFLICT",
                     delta_s=0,
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     failed_predicate="compare_and_commit",
                     detail_code=exc.code,
                     state_root_after=exc.observed_root,
@@ -427,7 +448,7 @@ class TAS0XAgent:
                 self._seen_nonces.add(envelope.nonce)
                 return self._halt_indeterminate(
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     detail_code=exc.code,
                     state_root_after=exc.observed_root,
                     evidence_id=envelope.evidence_id,
@@ -439,7 +460,7 @@ class TAS0XAgent:
                 self._seen_nonces.add(envelope.nonce)
                 return self._halt_indeterminate(
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     detail_code=type(exc).__name__,
                     state_root_after=self._safe_read_state_root(),
                     evidence_id=envelope.evidence_id,
@@ -459,7 +480,7 @@ class TAS0XAgent:
             else:
                 return self._halt_indeterminate(
                     snapshot=snapshot,
-                    proposal=proposal,
+                    proposal=sealed_proposal,
                     detail_code=f"unknown_admission_outcome:{type(outcome).__name__}",
                     state_root_after=self._safe_read_state_root(),
                     evidence_id=envelope.evidence_id,
@@ -471,7 +492,7 @@ class TAS0XAgent:
                 "status": status,
                 "delta_s": outcome.delta_s,
                 "sequence": snapshot.sequence,
-                "proposal": proposal,
+                "proposal": sealed_proposal,
                 "evidence_id": outcome.evidence_id,
                 "verdict_receipt_hash": outcome.verdict.receipt_hash,
                 "boundary_lineage_hash": outcome.lineage_evidence_hash,
@@ -485,7 +506,7 @@ class TAS0XAgent:
             return TAS0XResult(
                 status=status,
                 delta_s=outcome.delta_s,
-                proposal=_clone(proposal),
+                proposal=_clone(sealed_proposal),
                 state_root_before=snapshot.state_root,
                 state_root_after=state_root_after,
                 failed_predicate=failed_predicate,
@@ -525,7 +546,8 @@ class TAS0XAgent:
         snapshot: AgentSnapshot,
     ) -> bool:
         try:
-            return bool(binding.invariant(arguments, snapshot))
+            result = binding.invariant(arguments, snapshot)
+            return result is True
         except Exception:
             return False
 
@@ -597,7 +619,7 @@ class TAS0XAgent:
         evidence_id: Optional[str],
         nonce: Optional[str],
     ) -> TAS0XResult:
-        result = self._local_terminal(
+        return self._local_terminal(
             status="INDETERMINATE",
             delta_s=None,
             snapshot=snapshot,
@@ -607,9 +629,8 @@ class TAS0XAgent:
             state_root_after=state_root_after,
             evidence_id=evidence_id,
             nonce=nonce,
+            halt_detail_code=detail_code,
         )
-        self._halted_reason = f"{detail_code}:{result.terminal_hash}"
-        return result
 
     def _local_terminal(
         self,
@@ -623,6 +644,7 @@ class TAS0XAgent:
         state_root_after: Optional[str],
         evidence_id: Optional[str] = None,
         nonce: Optional[str] = None,
+        halt_detail_code: Optional[str] = None,
     ) -> TAS0XResult:
         body = {
             "agent": TAS0X_AGENT_ID,
@@ -638,7 +660,9 @@ class TAS0XAgent:
             "detail_code": detail_code,
             "parent_terminal_hash": snapshot.lineage_head,
         }
-        terminal_hash = self._record_terminal(body)
+        terminal_hash = self._record_terminal(
+            body, halt_detail_code=halt_detail_code
+        )
         receipt = {**_clone(body), "terminal_hash": terminal_hash}
         return TAS0XResult(
             status=status,
@@ -652,7 +676,12 @@ class TAS0XAgent:
             receipt=receipt,
         )
 
-    def _record_terminal(self, body: Mapping[str, Any]) -> str:
+    def _record_terminal(
+        self,
+        body: Mapping[str, Any],
+        *,
+        halt_detail_code: Optional[str] = None,
+    ) -> str:
         # Seal a detached snapshot. No caller, sink, or returned result receives
         # the same mutable object stored in the local witness.
         sealed_body = _clone(dict(body))
@@ -661,6 +690,13 @@ class TAS0XAgent:
         self._witness.append(_clone(record))
         self._lineage_head = terminal_hash
         self._sequence += 1
+
+        # For an indeterminate effect, the halt coordinate becomes authoritative
+        # before any externally controlled callback can run. A re-entrant sink
+        # therefore observes RuntimeHalted instead of starting another cycle.
+        if halt_detail_code is not None:
+            self._halted_reason = f"{halt_detail_code}:{terminal_hash}"
+
         if self._witness_sink is not None:
             try:
                 self._witness_sink(_clone(record))
