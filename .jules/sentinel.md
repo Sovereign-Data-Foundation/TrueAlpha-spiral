@@ -63,3 +63,8 @@
 **Vulnerability:** Safe use of subcommands with `-c` flag (e.g., `git log -c` or `git grep -c`) was blocked by `GitActionGuard` due to overly restrictive filtering of global options.
 **Learning:** Command line arguments in tools like Git often have context-dependent meanings. A `-c` argument behaves as a global configuration injector when placed before the subcommand, but acts as a safe, localized behavior modifier (like showing merge diffs in `log` or counting matches in `grep`) when placed after specific subcommands. Overly rigid argument checks create false positives that can break functionality or motivate users to bypass security measures.
 **Prevention:** Ensure command line sanitizers track position and subcommand context, explicitly allowing safe flag usage within the bounds of specific non-destructive subcommands.
+
+## 2024-10-30 - [Fix Git Command Injection via Script Validation Bypass]
+**Vulnerability:** Command injection in `codex_tas_runner.py`. The `validate_script` function allowed the `git` command but did not inspect its arguments, enabling command injection via malicious global options like `-c core.pager=!sh`, `--exec-path`, or `--config-env` within executed bash scripts.
+**Learning:** Allowlisting a binary like `git` within a shell script without sanitizing its arguments leaves the system vulnerable to command injection if the binary parses arbitrary global configuration options that execute code.
+**Prevention:** Explicitly apply strict argument inspection for allowlisted extensible tools (like `git`) inside script parsers. Reject risky global flags unless their safe use is rigorously verified within the specific subcommand context.
