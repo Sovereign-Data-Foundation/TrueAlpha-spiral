@@ -69,6 +69,64 @@ def _split_operators(tokens):
                 result.append(part)
     return result
 
+def _check_command(cmd_tokens):
+    cmd_name = None
+    args_start_idx = 0
+    for i, token in enumerate(cmd_tokens):
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*=', token):
+            continue
+        else:
+            cmd_name = token
+            args_start_idx = i
+            break
+
+    if not cmd_name:
+        return True, "Valid"
+
+    if cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
+        if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
+            return False, f"Unauthorized command: {cmd_name}"
+        else:
+            return False, "Unauthorized path-based execution"
+
+    if cmd_name in ('bash', 'python', 'python3'):
+        for token_arg in cmd_tokens[args_start_idx + 1:]:
+            if token_arg.startswith('-') and not token_arg.startswith('--'):
+                if 'c' in token_arg or 'm' in token_arg:
+                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            elif token_arg.startswith('-c=') or token_arg.startswith('-m='):
+                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+
+    if cmd_name == 'git':
+        git_subcommand = None
+        skip_next = False
+        for token_arg in cmd_tokens[args_start_idx + 1:]:
+            if skip_next:
+                skip_next = False
+                continue
+
+            if not git_subcommand:
+                if token_arg in ('-C', '--git-dir', '--work-tree', '--namespace', '--super-prefix'):
+                    skip_next = True
+                elif not token_arg.startswith('-'):
+                    git_subcommand = token_arg
+
+            is_dangerous = False
+            if (token_arg.startswith('--ext-cmd') or
+                token_arg.startswith('--exec-path') or
+                token_arg.startswith('--config') or
+                token_arg.startswith('--paginate')):
+                is_dangerous = True
+
+            if token_arg.startswith('-c') and not token_arg.startswith('--'):
+                if git_subcommand not in ('switch', 'checkout', 'commit', 'log', 'grep'):
+                    is_dangerous = True
+
+            if is_dangerous:
+                return False, f"Unauthorized option '{token_arg}' for git"
+
+    return True, "Valid"
+
 def validate_script(script):
     if not TAS_Heartproof(script):
         return False, "Unethical content detected"
@@ -100,49 +158,17 @@ def validate_script(script):
         for token in tokens:
             if token in (';', '&&', '||', '|', '&'):
                 if cmd_tokens:
-                    cmd_name = cmd_tokens[0]
-                    if '=' in cmd_name:
-                        parts = cmd_name.split('=', 1)
-                        if len(cmd_tokens) > 1:
-                            cmd_name = cmd_tokens[1]
-                        else:
-                            cmd_name = None
-                    if cmd_name and cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
-                        if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
-                            return False, f"Unauthorized command: {cmd_name}"
-                        else:
-                            return False, "Unauthorized path-based execution"
-                    if cmd_name in ('bash', 'python', 'python3'):
-                        for token_arg in cmd_tokens[1:]:
-                            if token_arg in ('-c', '-m'):
-                                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
-                            if token_arg.startswith('-') and not token_arg.startswith('--'):
-                                if 'c' in token_arg or 'm' in token_arg:
-                                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    is_valid, msg = _check_command(cmd_tokens)
+                    if not is_valid:
+                        return False, msg
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
 
         if cmd_tokens:
-            cmd_name = cmd_tokens[0]
-            if '=' in cmd_name:
-                parts = cmd_name.split('=', 1)
-                if len(cmd_tokens) > 1:
-                    cmd_name = cmd_tokens[1]
-                else:
-                    cmd_name = None
-            if cmd_name and cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
-                if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
-                    return False, f"Unauthorized command: {cmd_name}"
-                else:
-                    return False, "Unauthorized path-based execution"
-            if cmd_name in ('bash', 'python', 'python3'):
-                for token_arg in cmd_tokens[1:]:
-                    if token_arg in ('-c', '-m'):
-                        return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
-                    if token_arg.startswith('-') and not token_arg.startswith('--'):
-                        if 'c' in token_arg or 'm' in token_arg:
-                            return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            is_valid, msg = _check_command(cmd_tokens)
+            if not is_valid:
+                return False, msg
 
     print("Generated Script:\n")
     print(script)
