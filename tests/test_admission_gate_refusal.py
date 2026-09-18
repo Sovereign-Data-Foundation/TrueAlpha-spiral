@@ -70,7 +70,24 @@ def test_refusal_receipt_hash_is_deterministic():
     assert admitted1 is False
     assert admitted2 is False
     assert receipt1["receipt_hash"] == receipt2["receipt_hash"]
+    assert receipt1["refusal_receipt_id"] == receipt2["refusal_receipt_id"]
+    assert receipt1["refusal_receipt_id"] == f"sha256:{receipt1['receipt_hash']}"
     assert receipt1["proposal_hash"] == receipt2["proposal_hash"]
+
+
+def test_refusal_receipt_id_changes_with_evaluation_timestamp():
+    _, first = evaluate_proposal(
+        _proposal(),
+        _gate_result(context_valid=False, timestamp_ns=1786064400000000000),
+        "c" * 64,
+    )
+    _, second = evaluate_proposal(
+        _proposal(),
+        _gate_result(context_valid=False, timestamp_ns=1786064400000000001),
+        "c" * 64,
+    )
+
+    assert first["refusal_receipt_id"] != second["refusal_receipt_id"]
 
 
 def test_admitted_path_returns_admitted_decision():

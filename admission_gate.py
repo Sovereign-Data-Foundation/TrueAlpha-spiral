@@ -116,10 +116,11 @@ def _gate_result_to_evidence_snapshot(result: VerifiedGateResult) -> dict[str, A
     ts = result.timestamp_ns
     if not isinstance(ts, int) or isinstance(ts, bool):
         ts_str = "0"
-    elif -(2**53 - 1) <= ts <= 2**53 - 1:
-        ts_str = str(ts)
     else:
-        ts_str = "0"
+        # Encode nanosecond epochs as decimal text. Contemporary epoch values
+        # exceed JSON's interoperable integer range, but collapsing them to
+        # zero would make distinct evaluations share the same receipt ID.
+        ts_str = str(ts)
     return {
         "sig_valid": result.sig_valid,
         "authority_valid": result.authority_valid,
@@ -151,9 +152,13 @@ def _deterministic_refusal_receipt(
         "node_attestation": evidence_snapshot["node_attestation"],
         "resulting_state": "REFUSED",
     }
-    body["receipt_hash"] = hashlib.sha256(
+    receipt_hash = hashlib.sha256(
         REFUSAL_RECEIPT_DOMAIN + canonical_json(body)
     ).hexdigest()
+    body["receipt_hash"] = receipt_hash
+    # Keep the raw digest for backwards compatibility while exposing an
+    # algorithm-qualified identifier suitable for wake-chain references.
+    body["refusal_receipt_id"] = f"sha256:{receipt_hash}"
     return body
 
 
