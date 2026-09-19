@@ -120,3 +120,34 @@ def test_redirection_with_ampersand_allowed():
     script = "python tas_agent.py --task 'self-test' &> audit.log"
     is_valid, msg = validate_script(script)
     assert is_valid, msg
+
+def test_git_global_options_blocked():
+    """Ensure git global options are blocked to prevent command injection."""
+    script = "git -c core.pager='!echo pwned' log"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized git global option" in msg
+
+    script = "git --exec-path='/tmp' status"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized git global option" in msg
+
+    script = "git log --config-env=core.pager=EVIL"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized git global option" in msg
+
+    script = "git -p log"
+    is_valid, msg = validate_script(script)
+    assert not is_valid
+    assert "Unauthorized git global option" in msg
+
+    # Safe usage should be allowed
+    script = "git log -c"
+    is_valid, msg = validate_script(script)
+    assert is_valid, msg
+
+    script = "git log -p"
+    is_valid, msg = validate_script(script)
+    assert is_valid, msg
