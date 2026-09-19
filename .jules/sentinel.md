@@ -63,3 +63,7 @@
 **Vulnerability:** Safe use of subcommands with `-c` flag (e.g., `git log -c` or `git grep -c`) was blocked by `GitActionGuard` due to overly restrictive filtering of global options.
 **Learning:** Command line arguments in tools like Git often have context-dependent meanings. A `-c` argument behaves as a global configuration injector when placed before the subcommand, but acts as a safe, localized behavior modifier (like showing merge diffs in `log` or counting matches in `grep`) when placed after specific subcommands. Overly rigid argument checks create false positives that can break functionality or motivate users to bypass security measures.
 **Prevention:** Ensure command line sanitizers track position and subcommand context, explicitly allowing safe flag usage within the bounds of specific non-destructive subcommands.
+## 2024-05-18 - [Fix git command injection via global config options]
+**Vulnerability:** Command injection and unauthorized execution could be achieved using git global options (like `-c core.pager='!echo hacked'`).
+**Learning:** Checking the base command name (e.g. `git`) isn't enough if the command itself accepts global configuration options that can execute shell commands before subcommands.
+**Prevention:** For programs like git that accept global config options that can execute commands, rigorously enforce that unauthorized global arguments (`-c`, `--ext-cmd`, `--exec-path`, `--config`, etc.) are blocked BEFORE the subcommand.
