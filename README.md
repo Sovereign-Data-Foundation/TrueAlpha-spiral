@@ -78,6 +78,25 @@ highly secure public utility layer. It enforces three primary mandates:
 - **True Intelligence Alignment** — Initiates the required paradigm shifts to
   ensure computational agents operate within deterministic boundaries.
 
+### Local development and cryptography dependency
+
+The repository uses the Python [`cryptography`](https://cryptography.io/) package
+for Ed25519 and elliptic-curve signing in the runtime and test suite. Install the
+development dependencies in a virtual environment before running tests:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+pytest -q
+```
+
+No blockchain asset, payment, or collateral is required. The "Objective Token
+τ" described below is a protocol-level admissibility object: it represents a
+candidate action and its verification evidence, not a minted cryptocurrency or
+financial token. Cryptographic tests generate ephemeral signing keys locally.
+Do not commit production private keys or seed phrases to this repository.
+
 ### Cryptographic and Geometric Verification Stack
 
 To function as a viable public utility, TAS/SDF demands zero-trust,
