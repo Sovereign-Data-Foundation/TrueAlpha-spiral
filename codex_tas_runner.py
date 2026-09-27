@@ -6,6 +6,37 @@ script, execute it line-by-line, and print a summary JSON.
 import os, subprocess, json, hashlib, time, shlex, re
 from tas_pythonetics.ethics import TAS_Heartproof
 
+ENV_VAR_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*=')
+
+def _check_command(cmd_tokens, allowed_commands, posix_keywords):
+    if not cmd_tokens:
+        return True, "Valid"
+
+    cmd_idx = 0
+    while cmd_idx < len(cmd_tokens) and ENV_VAR_RE.match(cmd_tokens[cmd_idx]):
+        cmd_idx += 1
+
+    if cmd_idx >= len(cmd_tokens):
+        return True, "Valid"
+
+    cmd_name = cmd_tokens[cmd_idx]
+    if cmd_name not in allowed_commands and cmd_name not in posix_keywords:
+        if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
+            return False, f"Unauthorized command: {cmd_name}"
+        else:
+            return False, "Unauthorized path-based execution"
+
+    if cmd_name in ('bash', 'python', 'python3'):
+        for token_arg in cmd_tokens[cmd_idx + 1:]:
+            if token_arg in ('-c', '-m'):
+                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            if token_arg.startswith('-') and not token_arg.startswith('--'):
+                if 'c' in token_arg or 'm' in token_arg:
+                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+
+    return True, "Valid"
+
+
 try:
     import openai
     openai.api_key = os.getenv("OPENAI_API_KEY")  # <-- export before run
@@ -100,49 +131,17 @@ def validate_script(script):
         for token in tokens:
             if token in (';', '&&', '||', '|', '&'):
                 if cmd_tokens:
-                    cmd_name = cmd_tokens[0]
-                    if '=' in cmd_name:
-                        parts = cmd_name.split('=', 1)
-                        if len(cmd_tokens) > 1:
-                            cmd_name = cmd_tokens[1]
-                        else:
-                            cmd_name = None
-                    if cmd_name and cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
-                        if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
-                            return False, f"Unauthorized command: {cmd_name}"
-                        else:
-                            return False, "Unauthorized path-based execution"
-                    if cmd_name in ('bash', 'python', 'python3'):
-                        for token_arg in cmd_tokens[1:]:
-                            if token_arg in ('-c', '-m'):
-                                return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
-                            if token_arg.startswith('-') and not token_arg.startswith('--'):
-                                if 'c' in token_arg or 'm' in token_arg:
-                                    return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    is_valid, reason = _check_command(cmd_tokens, ALLOWED_COMMANDS, POSIX_KEYWORDS)
+                    if not is_valid:
+                        return False, reason
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
 
         if cmd_tokens:
-            cmd_name = cmd_tokens[0]
-            if '=' in cmd_name:
-                parts = cmd_name.split('=', 1)
-                if len(cmd_tokens) > 1:
-                    cmd_name = cmd_tokens[1]
-                else:
-                    cmd_name = None
-            if cmd_name and cmd_name not in ALLOWED_COMMANDS and cmd_name not in POSIX_KEYWORDS:
-                if not (cmd_name.startswith('./') or cmd_name.startswith('/')):
-                    return False, f"Unauthorized command: {cmd_name}"
-                else:
-                    return False, "Unauthorized path-based execution"
-            if cmd_name in ('bash', 'python', 'python3'):
-                for token_arg in cmd_tokens[1:]:
-                    if token_arg in ('-c', '-m'):
-                        return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
-                    if token_arg.startswith('-') and not token_arg.startswith('--'):
-                        if 'c' in token_arg or 'm' in token_arg:
-                            return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            is_valid, reason = _check_command(cmd_tokens, ALLOWED_COMMANDS, POSIX_KEYWORDS)
+            if not is_valid:
+                return False, reason
 
     print("Generated Script:\n")
     print(script)
