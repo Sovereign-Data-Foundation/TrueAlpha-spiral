@@ -120,3 +120,36 @@ def test_redirection_with_ampersand_allowed():
     script = "python tas_agent.py --task 'self-test' &> audit.log"
     is_valid, msg = validate_script(script)
     assert is_valid, msg
+
+def test_git_injection_blocked():
+    """Sentinel check: Git global config overrides must be blocked."""
+    scripts = [
+        "git -c core.pager='!sh -c \"echo pwned\"' log",
+        "git -c=core.pager=... log",
+        "git -ccore.pager=... log",
+        "git --config core.pager=... log",
+        "git --config=core.pager=... log",
+        "git --exec-path log",
+        "git --exec-path=... log",
+        "git --ext-cmd=... log",
+        "git --config-env=... log",
+        "git --paginate log",
+        "git config core.pager '!sh'"
+    ]
+    for script in scripts:
+        is_valid, msg = validate_script(script)
+        assert not is_valid, f"Script should be blocked: {script}"
+        assert "Unauthorized execution option" in msg or "Unauthorized git command: config" in msg
+
+def test_git_safe_allowed():
+    """Sentinel check: Valid git usage including safe subcommands should pass."""
+    scripts = [
+        "git clone https://example.com/repo.git",
+        "git log -c", # show diff context
+        "git switch -c mybranch",
+        "git checkout -c mybranch",
+        "git commit -m 'message'"
+    ]
+    for script in scripts:
+        is_valid, msg = validate_script(script)
+        assert is_valid, f"Script should be valid: {script}\nReason: {msg}"
