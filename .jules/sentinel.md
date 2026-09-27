@@ -63,3 +63,12 @@
 **Vulnerability:** Safe use of subcommands with `-c` flag (e.g., `git log -c` or `git grep -c`) was blocked by `GitActionGuard` due to overly restrictive filtering of global options.
 **Learning:** Command line arguments in tools like Git often have context-dependent meanings. A `-c` argument behaves as a global configuration injector when placed before the subcommand, but acts as a safe, localized behavior modifier (like showing merge diffs in `log` or counting matches in `grep`) when placed after specific subcommands. Overly rigid argument checks create false positives that can break functionality or motivate users to bypass security measures.
 **Prevention:** Ensure command line sanitizers track position and subcommand context, explicitly allowing safe flag usage within the bounds of specific non-destructive subcommands.
+## 2024-05-18 - [Fix Command Injection via Multi Environment Variable Bypass in Script Validation]
+**Vulnerability:** Command injection/arbitrary command execution in `codex_tas_runner.py`. The `validate_script` function previously only skipped one environment variable via `cmd_name.split('=', 1)` before validating the main binary execution path. This allowed attackers to specify a second environment variable masking the malicious command execution (e.g. `A=1 python $A "import os; os.system('echo pwned')"`) or bypass flag checks entirely.
+**Learning:** Naively skipping environment variables assuming a max count (e.g., 1) or using string manipulation rather than iteration via regex matching leaves argument token parsing open to manipulation. An arbitrary amount of assignments can precede a binary in shell context.
+**Prevention:** Always iterate robustly utilizing a regex check (like `^[a-zA-Z_][a-zA-Z0-9_]*=`) over all preceding environment variable argument assignments before finalizing which token holds the execution binary.
+
+## 2024-05-18 - [Fix Command Injection in Script Runner by Blocking equals Syntax]
+**Vulnerability:** Arbitrary execution via python/bash execution flags (e.g., `python -c=print("pwned")`) and git global parameters (e.g., `git --config-env=core.pager=evil log`).
+**Learning:** When sanitizing arguments, using strict string equality (`==`) or iterating tokens loosely fails when users concatenate values to parameters via `=`.
+**Prevention:** When creating argument filtering/validating wrappers, always use `.startswith()` evaluations for options instead of exact matching, avoiding delimiter-based logic gaps.
