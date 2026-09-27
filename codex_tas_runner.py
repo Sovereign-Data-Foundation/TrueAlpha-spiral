@@ -119,6 +119,28 @@ def validate_script(script):
                             if token_arg.startswith('-') and not token_arg.startswith('--'):
                                 if 'c' in token_arg or 'm' in token_arg:
                                     return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+                    elif cmd_name == 'git':
+                        subcommand_idx = -1
+                        i = 1
+                        while i < len(cmd_tokens):
+                            if not cmd_tokens[i].startswith("-"):
+                                subcommand_idx = i
+                                break
+                            if cmd_tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                                i += 2
+                            else:
+                                i += 1
+                        for i in range(1, len(cmd_tokens)):
+                            token_arg = cmd_tokens[i]
+                            if (token_arg.startswith("--ext-cmd") or token_arg.startswith("--exec-path") or
+                                token_arg.startswith("--config-env") or token_arg.startswith("--config") or
+                                token_arg.startswith("--paginate") or token_arg.startswith("--upload-pack") or
+                                token_arg.startswith("--receive-pack")):
+                                return False, f"Unauthorized execution option '{token_arg}' for git"
+                            if token_arg.startswith("-c"):
+                                if subcommand_idx != -1 and cmd_tokens[subcommand_idx].lower() in ("switch", "checkout", "commit", "log", "grep") and i > subcommand_idx:
+                                    continue
+                                return False, f"Unauthorized execution option '{token_arg}' for git"
                 cmd_tokens = []
             else:
                 cmd_tokens.append(token)
@@ -143,6 +165,28 @@ def validate_script(script):
                     if token_arg.startswith('-') and not token_arg.startswith('--'):
                         if 'c' in token_arg or 'm' in token_arg:
                             return False, f"Unauthorized execution option '{token_arg}' for {cmd_name}"
+            elif cmd_name == 'git':
+                subcommand_idx = -1
+                i = 1
+                while i < len(cmd_tokens):
+                    if not cmd_tokens[i].startswith("-"):
+                        subcommand_idx = i
+                        break
+                    if cmd_tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                        i += 2
+                    else:
+                        i += 1
+                for i in range(1, len(cmd_tokens)):
+                    token_arg = cmd_tokens[i]
+                    if (token_arg.startswith("--ext-cmd") or token_arg.startswith("--exec-path") or
+                        token_arg.startswith("--config-env") or token_arg.startswith("--config") or
+                        token_arg.startswith("--paginate") or token_arg.startswith("--upload-pack") or
+                        token_arg.startswith("--receive-pack")):
+                        return False, f"Unauthorized execution option '{token_arg}' for git"
+                    if token_arg.startswith("-c"):
+                        if subcommand_idx != -1 and cmd_tokens[subcommand_idx].lower() in ("switch", "checkout", "commit", "log", "grep") and i > subcommand_idx:
+                            continue
+                        return False, f"Unauthorized execution option '{token_arg}' for git"
 
     print("Generated Script:\n")
     print(script)
