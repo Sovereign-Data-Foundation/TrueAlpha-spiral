@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Small JSON-RPC client used by the isolated TAS verification runners."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+class AdapterError(RuntimeError):
+    """Raised when the runtime transport returns an invalid response."""
+
+
+class SocketClient:
+    """Send one newline-delimited JSON-RPC request per Unix-socket connection."""
+
+    def __init__(self, socket_path: str, timeout: float = 5.0) -> None:
+        self.socket_path = socket_path
+        self.timeout = timeout
+
+    async def send_rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_unix_connection(self.socket_path, limit=8 * 1024 * 1024 + 1),
+            timeout=self.timeout,
+        )
+        try:
+            request = {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+                "id": hashlib.sha256(os.urandom(32)).hexdigest()[:16],
+            }
+            writer.write(
+                json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
+                + b"\n"
+            )
+            await asyncio.wait_for(writer.drain(), timeout=self.timeout)
+            raw = await asyncio.wait_for(reader.readline(), timeout=self.timeout)
+            if not raw:
+                raise AdapterError("runtime closed the socket without a response")
+            if len(raw) > 8 * 1024 * 1024:
+                raise AdapterError("runtime response exceeds 8 MiB")
+            response = json.loads(raw)
+            if not isinstance(response, dict) or response.get("jsonrpc") != "2.0":
+                raise AdapterError("runtime returned an invalid JSON-RPC envelope")
+            if response.get("id") != request["id"]:
+                raise AdapterError("runtime response id does not match request id")
+            return response
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+def load_object(path: str) -> dict[str, Any]:
+    """Load a JSON object, rejecting arrays and scalar fixture roots."""
+    with Path(path).open(encoding="utf-8") as stream:
+        value = json.load(stream)
+    if not isinstance(value, dict):
+        raise ValueError(f"fixture root must be a JSON object: {path}")
+    return value
+
+
+def error_code(response: dict[str, Any]) -> str | None:
+    error = response.get("error")
+    return error.get("code") if isinstance(error, dict) else None
+
+
+async def verify_receipt(args: argparse.Namespace) -> int:
+    receipt = load_object(args.input)
+    response = await SocketClient(args.socket, args.timeout).send_rpc(
+        "sdf.verify_receipt", {"receipt": receipt}
+    )
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("valid") is True:
+        print(json.dumps({"status": "OK", "receipt_id": receipt.get("id")}))
+        return 0
+    print(f"[FAIL] receipt validation failed: {response}", file=sys.stderr)
+    return 1
+
+
+async def exec_benchmark(args: argparse.Namespace) -> int:
+    spec = load_object(args.spec)
+    response = await SocketClient(args.socket, args.timeout).send_rpc(
+        "benchmark.execute", {"spec": spec}
+    )
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("passed") is True:
+        print(json.dumps({"status": "PASS", "benchmark": spec.get("name")}))
+        return 0
+    print(f"[FAIL] benchmark failed: {response}", file=sys.stderr)
+    return 1
+
+
+async def run_race(args: argparse.Namespace) -> int:
+    fresh = load_object(args.competing_tx)
+    stale = load_object(args.stale_tx)
+    fresh_response, stale_response = await asyncio.gather(
+        SocketClient(args.socket, args.timeout).send_rpc("tx.commit", {"tx": fresh}),
+        SocketClient(args.socket, args.timeout).send_rpc("tx.commit", {"tx": stale}),
+    )
+    fresh_result = fresh_response.get("result")
+    committed = isinstance(fresh_result, dict) and fresh_result.get("committed") is True
+    code = error_code(stale_response)
+    output = {
+        "competing_committed": committed,
+        "stale_rejected": code == "ERR_OCC_STALE_READ",
+        "conflict_code": code or "NONE",
+    }
+    print(json.dumps(output, sort_keys=True))
+    return 0 if output["competing_committed"] and output["stale_rejected"] else 1
+
+
+async def submit(args: argparse.Namespace) -> int:
+    payload = load_object(args.payload)
+    response = await SocketClient(args.socket, args.timeout).send_rpc(
+        "tx.submit_raw", {"payload": payload}
+    )
+    error = response.get("error")
+    result = response.get("result")
+    rejected = isinstance(error, dict) or (
+        isinstance(result, dict) and result.get("status") == "REJECTED"
+    )
+    if rejected:
+        reason = error.get("message", "validation failed") if isinstance(error, dict) else None
+        print(json.dumps({"status": "REJECTED", "reason": reason}))
+        return 0
+    print(json.dumps({"status": "ACCEPTED", "result": result}))
+    return 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    client = commands.add_parser("client")
+    actions = client.add_subparsers(dest="action", required=True)
+
+    def action(name: str) -> argparse.ArgumentParser:
+        child = actions.add_parser(name)
+        child.add_argument("--socket", required=True)
+        child.add_argument("--timeout", type=float, default=5.0)
+        return child
+
+    action("verify-receipt").add_argument("--input", required=True)
+    action("exec-benchmark").add_argument("--spec", required=True)
+    race = action("run-race")
+    race.add_argument("--competing-tx", required=True)
+    race.add_argument("--stale-tx", required=True)
+    action("submit").add_argument("--payload", required=True)
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    handlers = {
+        "verify-receipt": verify_receipt,
+        "exec-benchmark": exec_benchmark,
+        "run-race": run_race,
+        "submit": submit,
+    }
+    if args.timeout <= 0:
+        raise ValueError("--timeout must be positive")
+    return asyncio.run(handlers[args.action](args))
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (AdapterError, OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"[ADAPTER ERROR] {exc}", file=sys.stderr)
+        raise SystemExit(2)
