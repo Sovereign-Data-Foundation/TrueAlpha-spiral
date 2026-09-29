@@ -103,7 +103,8 @@ def _check_command(cmd_tokens):
                 safe_subcmd_seen = True
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
                             arg.startswith('--exec-path') or arg.startswith('--config') or
-                            arg.startswith('--paginate'))
+                            arg.startswith('--paginate') or arg.startswith('--upload-pack') or
+                            arg.startswith('--receive-pack') or arg.startswith('-u'))
             if is_dangerous and not safe_subcmd_seen:
                 return False, f"Unauthorized git option: {arg}"
 
