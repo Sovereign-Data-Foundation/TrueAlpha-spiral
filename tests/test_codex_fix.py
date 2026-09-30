@@ -120,3 +120,23 @@ def test_redirection_with_ampersand_allowed():
     script = "python tas_agent.py --task 'self-test' &> audit.log"
     is_valid, msg = validate_script(script)
     assert is_valid, msg
+
+def test_validate_script_multiple_env_vars():
+    from codex_tas_runner import validate_script
+
+    # Test valid multiple assignments
+    valid, msg = validate_script("VAR1=1 VAR2=2 echo hello")
+    assert valid, f"Expected valid, got {msg}"
+
+    # Test assignment only command
+    valid, msg = validate_script("VAR1=1 VAR2=2")
+    assert valid, f"Expected valid, got {msg}"
+
+    # Test assignment followed by unauthorized command
+    valid, msg = validate_script("VAR1=1 VAR2=2 cat /etc/passwd | os.system")
+    assert not valid
+
+    # Test git sensitive assignments
+    valid, msg = validate_script("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=!sh git log")
+    assert not valid
+    assert "Unauthorized Git environment variable" in msg

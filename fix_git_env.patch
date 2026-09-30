@@ -1,0 +1,13 @@
+--- codex_tas_runner.py
++++ codex_tas_runner.py
+@@ -75,6 +75,10 @@
+     idx = 0
+     # Skip multiple environment variables
+     while idx < len(cmd_tokens) and re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*=', cmd_tokens[idx]):
++        # Block security-sensitive Git environment variables
++        env_var = cmd_tokens[idx].split('=', 1)[0]
++        if env_var.startswith('GIT_'):
++            return False, f"Unauthorized Git environment variable: {env_var}"
+         idx += 1
+
+     if idx >= len(cmd_tokens):
