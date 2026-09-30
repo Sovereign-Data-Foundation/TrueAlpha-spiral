@@ -68,3 +68,8 @@
 **Vulnerability:** The script validator `codex_tas_runner.py` failed to account for malicious environment variable padding before commands (e.g. `VAR1=1 VAR2=2...`) and did not explicitly block dangerous global configuration flags in `git` (such as `-c core.pager="!sh"`), leading to command injection bypasses.
 **Learning:** Command parsers must explicitly iterate over *all* leading environment variable assignments to accurately isolate the true command token. Furthermore, when allowlisting complex commands like `git`, security filters must distinguish between dangerous global options (which execute arbitrary hooks) and safe subcommand arguments.
 **Prevention:** Use a `while` loop with regex `^[a-zA-Z_][a-zA-Z0-9_]*=` to skip all environment variables during parsing. For `git`, enforce that execution-modifying global options (`-c`, `--exec-path`, `--config`, etc.) are blocked if they appear before a safe subcommand is detected.
+
+## 2024-10-31 - [Command Injection via Git Remote Pack Execution]
+**Vulnerability:** Arbitrary command execution in `codex_tas_runner.py`. The `_check_command` function failed to block remote repository execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone), allowing command execution when connecting to a remote.
+**Learning:** Command line utilities that connect to remote endpoints can often execute arbitrary binaries via options that specify the protocol handlers. These can be abused to run local arbitrary commands.
+**Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) when wrapping remote-capable command-line tools.
