@@ -107,8 +107,9 @@ Use a repeatable three-frame visual:
 
 1. **Proposal:** A model or conventional program requests an action.
 2. **Gate:** Explicit authority and invariants are checked.
-3. **Receipt:** Admission or refusal is recorded before any protected state
-   transition.
+3. **Receipt:** A refusal receipt is recorded without a protected-state transition;
+   an admission receipt records the resulting transition and its before-and-after
+   state commitments.
 
 Reserve architecture-specific names such as Living Braid, SentientLock, and
 Gold/Teal/Violet threads for technical material. In public copy, pair every name
