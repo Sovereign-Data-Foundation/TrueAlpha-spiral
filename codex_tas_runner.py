@@ -101,6 +101,12 @@ def _check_command(cmd_tokens):
         for arg in cmd_tokens[idx+1:]:
             if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
                 safe_subcmd_seen = True
+
+            if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
+                return False, f"Unauthorized git option: {arg}"
+            if arg.startswith('-u') and (len(cmd_tokens) > idx+1 and cmd_tokens[idx+1] == 'clone'):
+                return False, f"Unauthorized git option: {arg}"
+
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
                             arg.startswith('--exec-path') or arg.startswith('--config') or
                             arg.startswith('--paginate'))
