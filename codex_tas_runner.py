@@ -98,13 +98,24 @@ def _check_command(cmd_tokens):
 
     if cmd_name == 'git':
         safe_subcmd_seen = False
+        subcommand_idx = -1
+        i = idx + 1
+        while i < len(cmd_tokens):
+            if not cmd_tokens[i].startswith("-"):
+                subcommand_idx = i
+                break
+            if cmd_tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                i += 2
+            else:
+                i += 1
+
         for arg in cmd_tokens[idx+1:]:
             if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
                 safe_subcmd_seen = True
 
             if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
                 return False, f"Unauthorized git option: {arg}"
-            if arg.startswith('-u') and (len(cmd_tokens) > idx+1 and cmd_tokens[idx+1] == 'clone'):
+            if arg.startswith('-u') and subcommand_idx != -1 and cmd_tokens[subcommand_idx] == 'clone':
                 return False, f"Unauthorized git option: {arg}"
 
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
