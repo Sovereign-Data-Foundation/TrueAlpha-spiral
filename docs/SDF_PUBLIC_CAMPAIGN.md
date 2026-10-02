@@ -159,7 +159,7 @@ truth, safety, justice, or intelligence.
 
 ### Campaign headline
 
-# If automation can affect your life, it should show its receipt.
+> **If automation can affect your life, it should show its receipt.**
 
 ### Campaign subhead
 
