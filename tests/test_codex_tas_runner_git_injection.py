@@ -10,3 +10,6 @@ def test_git_injection_blocked():
 def test_git_normal_allowed():
     assert _check_command(['git', 'clone', 'https://github.com/truealphaspiral/tas_gpt.git']) == (True, '')
     assert _check_command(['git', 'log', '-c']) == (True, '')
+
+def test_git_injection_bypass_blocked():
+    assert _check_command(['git', '--bare', 'clone', '-u', 'id']) == (False, 'Unauthorized git option: -u')

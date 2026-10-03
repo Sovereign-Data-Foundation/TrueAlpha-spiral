@@ -104,7 +104,7 @@ def _check_command(cmd_tokens):
 
             if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
                 return False, f"Unauthorized git option: {arg}"
-            if arg.startswith('-u') and (len(cmd_tokens) > idx+1 and cmd_tokens[idx+1] == 'clone'):
+            if arg.startswith('-u') and 'clone' in cmd_tokens:
                 return False, f"Unauthorized git option: {arg}"
 
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
