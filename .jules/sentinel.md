@@ -72,3 +72,7 @@
 **Vulnerability:** In `codex_tas_runner.py`, `git` subcommands that connect to remote endpoints were allowing execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone) to slip through.
 **Learning:** Utilities connecting remotely can exploit arbitrary binaries by overwriting remote protocols through options.
 **Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) whenever parsing git commands in validation wrappers.
+## 2024-05-23 - [Position-Dependent Shell Argument Validation Bypass]
+**Vulnerability:** The `codex_tas_runner.py` script used a position-dependent check to block the `-u` option during `git clone` (e.g., expecting `clone` to immediately follow `git` or `-u` to be the very next argument). This allowed an attacker to bypass the block by inserting other global git options before the `clone` subcommand (e.g., `git --bare clone -u`), leading to potential remote code execution via `-u`.
+**Learning:** Hardcoded position indices for subcommand detection are fragile and easily bypassed in command-line arguments, as flags can be injected between the main command and subcommands.
+**Prevention:** Instead of relying on strict argument indices, check for the presence of the subcommand in the entire token list (e.g., `'clone' in cmd_tokens`) or parse tokens iteratively to identify the actual subcommand before enforcing position-dependent constraints.
