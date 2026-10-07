@@ -72,3 +72,7 @@
 **Vulnerability:** In `codex_tas_runner.py`, `git` subcommands that connect to remote endpoints were allowing execution arguments like `--upload-pack` and `--receive-pack` (and `-u` for clone) to slip through.
 **Learning:** Utilities connecting remotely can exploit arbitrary binaries by overwriting remote protocols through options.
 **Prevention:** Explicitly block remote pack execution arguments (like `--upload-pack`, `--receive-pack`, and the `-u` shortcut on `clone`) whenever parsing git commands in validation wrappers.
+## 2024-05-15 - [Bypass of `git clone -u` Command Injection Prevention]
+**Vulnerability:** Position-dependent parsing of git arguments in `codex_tas_runner.py` allowed bypassing the restricted `-u` flag check for `git clone` by injecting a git global option like `--bare` before `clone`.
+**Learning:** Hardcoding token array offsets (like `cmd_tokens[idx+1] == 'clone'`) assumes a strict position for commands which is easily bypassed by valid git global options before the subcommand.
+**Prevention:** Iteratively parse tokens or search the token sequence (e.g., `'clone' in cmd_tokens`) to check if a specific subcommand is present instead of assuming an exact offset.
