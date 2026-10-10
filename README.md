@@ -1,5 +1,9 @@
 # TrueAlphaSpiral (TAS_DNA)
 
+## Canonical workspace
+
+[Workspace map and consolidation ledger](./WORKSPACE.md) records the active home, imported source snapshots, and remaining intake.
+
 ![Architecture](https://img.shields.io/badge/Architecture-TAS__DNA-blue)
 ![Integrity](https://img.shields.io/badge/Integrity-Deterministic_Verification-brightgreen)
 ![Stage](https://img.shields.io/badge/Stage-Active-purple)
