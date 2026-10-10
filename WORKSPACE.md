@@ -17,6 +17,8 @@ The 15 text files under `docs/explainer/` are an unchanged path-preserving copy 
 
 ## Remaining intake
 
+[Repository intake inventory](./docs/migration/repository-inventory.md) lists all 23 public repositories found across the two accounts and their fork relationships. Four private repositories are intentionally excluded from the public listing. The parent and Foundation main branches have diverged; the parent was 145 commits ahead and 93 behind in the comparison observed on 2026-10-10.
+
 | Source | Disposition before import |
 | --- | --- |
 | [TrueAlpha-spiral/TrueAlpha-spiral](https://github.com/TrueAlpha-spiral/TrueAlpha-spiral) | Parent of this repository's fork. Compare divergent branches and reconcile original work by reviewed PR, preserving author, source commit, and conflicting implementation decisions. Do not replace this branch with a bulk copy. |
