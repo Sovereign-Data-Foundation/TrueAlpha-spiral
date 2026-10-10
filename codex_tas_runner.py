@@ -97,6 +97,19 @@ def _check_command(cmd_tokens):
                     return False, f"Unauthorized execution option '{arg}' for {cmd_name}"
 
     if cmd_name == 'git':
+        subcommand = None
+        i = idx + 1
+        while i < len(cmd_tokens):
+            if not cmd_tokens[i].startswith('-'):
+                subcommand = cmd_tokens[i]
+                break
+            if cmd_tokens[i] in ('-C', '-c', '--work-tree', '--git-dir', '--namespace'):
+                i += 2
+            else:
+                i += 1
+        if subcommand == 'config':
+            return False, "Unauthorized git subcommand: config"
+
         safe_subcmd_seen = False
         for arg in cmd_tokens[idx+1:]:
             if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
