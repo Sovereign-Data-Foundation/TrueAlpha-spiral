@@ -14,22 +14,22 @@ The architectural full state is `S = (O, Γ)`: protected operational state and t
 
 This aligns with the [TAS_DNA state relation](../explainer/docs/tas-dna.md). Refusal is conserved as evidence; it is not deletion of the attempted proposal. An atomic runtime implementation must establish this relation under its storage, concurrency, recovery, and effect assumptions.
 
-## Reported formal development
+## Supplied formal development
 
-The curator identifies these objects in a bundled Lean development:
+The curator supplied the Lean source, now packaged as [TASCalculus.lean](../../formal/tas-calculus/TASCalculus.lean). The [project instructions](../../formal/tas-calculus/README.md) pin Lean and Mathlib to v4.16.0. No Lake build or axiom-audit execution has been performed in this session:
 
 | Object | Reported role | Evidence status here |
 | --- | --- | --- |
-| `TASParams` | Parameterized calculus and licensing assumptions | Curator-reported; source bundle not retrieved |
-| `step` | Modeled admission/refusal transition | Curator-reported; definition not inspected |
-| `Invariant` | `Valid ∧ WellFormed` | Curator-reported; predicates not inspected |
-| `runTrace` | Execution of input traces | Curator-reported; definition not inspected |
-| `reachable_safe` | Preservation of the invariant from `init` across reachable states | Curator-reported; theorem not checked here |
+| `TASParams` | Parameterized calculus and licensing assumptions | Source supplied; checker verification pending |
+| `step` | Modeled admission/refusal transition | Definition supplied and text-reviewed; checker verification pending |
+| `Invariant` | `Valid ∧ WellFormed` | Predicates supplied and text-reviewed; checker verification pending |
+| `runTrace` | Execution of input traces | Definition supplied and text-reviewed; checker verification pending |
+| `reachable_safe` | Preservation of the invariant from `init` across reachable states | Proof body supplied; checker verification pending |
 | Geodesic theorem | Cost-minimizing admission spine | Curator-reported; theorem statement and hypotheses not inspected |
 
-On 2026-10-11, connected GitHub code searches for `reachable_safe` and `TASParams` in the Foundation organization returned no matches, and the canonical repository's main-branch tree contained no Lean files or Lean build configuration. This does not establish that the bundle is absent elsewhere.
+Before the source intake on this draft branch, on 2026-10-11, connected GitHub code searches for `reachable_safe` and `TASParams` in the Foundation organization returned no matches, and the canonical repository's main-branch tree contained no Lean files or Lean build configuration. This does not establish that the bundle is absent elsewhere.
 
-Before marking these claims machine-proved, recover the source, immutable revision, Lean toolchain and dependencies, exact declarations, assumptions/axioms, and reproducible build output. Inspect for placeholders and untrusted axioms. Bind the checked result to the actual artifact identity.
+Before marking these claims machine-proved, resolve and record the exact dependency commits in the generated lake-manifest.json, run the pinned build and AxiomAudit.lean, and retain reproducible output and exit statuses. Inspect for placeholders and unexpected axioms. Bind the checked result to the actual artifact identity. The geodesic theorem is not included in this source intake.
 
 A checked reachability theorem establishes the stated invariant for the modeled transitions under its assumptions. Connecting that result to production code requires a refinement argument and evidence that every protected mutation crosses the modeled boundary.
 
@@ -47,4 +47,4 @@ Tamper-evident, durable history additionally requires trusted checkpoints, authe
 
 ## Next evidence intake
 
-Recover the Lean proof bundle and the separately identified calculator archive. Preserve their distinct identities, then establish their relationship rather than assuming equivalence. Add machine-check results, runtime correspondence, and release evidence before upgrading the reported properties into verified public claims.
+Check the supplied Lean project and recover the separately identified calculator archive. Preserve their distinct identities, then establish their relationship rather than assuming equivalence. Add machine-check results, runtime correspondence, and release evidence before upgrading the reported properties into verified public claims.
