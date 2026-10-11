@@ -33,3 +33,11 @@ A single canonical workspace means new TAS work lands here by default. It does n
 ## Intake record for each later change
 
 Record: source repository and commit; original path and blob digest; destination path and commit; author/license; whether it is a draft, specification, code, test added, or test actually run; and any superseded or mirrored copy. Protected actions still require the repository's existing review and verification gates.
+
+## TAS_DNA public collection organization — 2026-10-11
+
+[The collection index](./TAS_DNA.md) provides one entry point across purpose, architecture, contracts, runtime, verification, research, campaign, and publication material. [The curation contract](./docs/curation/README.md) and [contribution guide](./CONTRIBUTING.md) define future intake. [The artifact register](./docs/curation/artifacts.json) preserves selected known source identities and recovery gaps.
+
+The prior root README at commit `7a1d9fa4cfe29ddf08a09e91589996f98b67fe0d` is preserved unchanged at `docs/curation/prior-readme.txt`. This organizational change does not import additional external implementations or reconcile divergent core branches.
+
+The witness transition and energy protocol summaries are proposed specifications from the curator's discussion. The calculator archive is unrecovered in this intake; its digest and demo results are curator-reported. No new calculator implementation, execution result, or seal is asserted.
