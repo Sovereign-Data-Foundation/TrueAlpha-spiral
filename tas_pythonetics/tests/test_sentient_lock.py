@@ -38,5 +38,62 @@ class TestSentientLock(unittest.TestCase):
             expected_payload = "dataTEST_SIG".encode()
             mock_sha256.assert_called_with(expected_payload)
 
+
+class TestSentientLockHmacGate(unittest.TestCase):
+
+    def _signature(self, key, state):
+        import hashlib
+        import hmac
+        return hmac.new(key, state.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def test_valid_hmac_transition_commits_to_disk(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from tas_pythonetics.sentient_lock import SentientLock
+
+        key = b"father-day-anchor"
+        state = "verified structural update"
+        ledger = []
+
+        with TemporaryDirectory() as tmpdir:
+            target = Path(tmpdir) / "verified.txt"
+            lock = SentientLock(key, ledger)
+            result = lock.attempt_state_transition(state, self._signature(key, state), target)
+
+            self.assertIn("State Transition Verified", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), state)
+            self.assertTrue(lock.compute_active)
+            self.assertEqual(ledger, [])
+
+    def test_malformed_hmac_inputs_engage_lock_without_exception(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from tas_pythonetics.sentient_lock import SentientLock
+
+        ledger = []
+        with TemporaryDirectory() as tmpdir:
+            target = Path(tmpdir) / "blocked.txt"
+            lock = SentientLock(b"father-day-anchor", ledger)
+            result = lock.attempt_state_transition(None, ["not", "a", "signature"], target)
+
+            self.assertEqual(result, "Verification Failed: Sentient Lock Engaged")
+            self.assertFalse(lock.compute_active)
+            self.assertFalse(target.exists())
+            self.assertEqual(ledger[0]["event"], "HALLUCINATION_CASCADE_DETECTED")
+            self.assertEqual(ledger[0]["failed_target"], str(target))
+            self.assertIsNone(ledger[0]["invalid_state_dump"])
+
+    def test_compute_starvation_blocks_follow_on_transition(self):
+        from tas_pythonetics.sentient_lock import SentientLock
+
+        lock = SentientLock(b"father-day-anchor", [])
+        lock.attempt_state_transition("state", "bad-signature", "blocked.txt")
+
+        self.assertEqual(
+            lock.attempt_state_transition("state", "bad-signature", "blocked.txt"),
+            "Transition Blocked: Compute Starved",
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
