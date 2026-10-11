@@ -31,9 +31,11 @@ predicates cleanly so that callers cannot accidentally conflate them:
 * ``nonce_fresh``    — the nonce has not been seen before (anti-replay).
 
 ``admissible`` is the conjunction of all five AND an external invariant check
-supplied by the caller.  Even when ``admissible`` is False, the verdict is a
-non-repudiable, serialisable record — so that the refusal receipt (ΔS = 0)
-carries the same evidentiary quality as an admission receipt.
+supplied by the caller.  The invariant predicate closes only on the literal
+boolean ``True``; truthy non-boolean values fail closed. Even when
+``admissible`` is False, the verdict is a non-repudiable, serialisable record —
+so that the refusal receipt (ΔS = 0) carries the same evidentiary quality as an
+admission receipt.
 
 What is deliberately absent from the envelope
 ---------------------------------------------
@@ -209,7 +211,7 @@ class EvidenceVerdict:
     ``context_match``  — the envelope's ``context`` field equals the
                          ``current_context`` passed by the caller.
     ``nonce_fresh``    — the nonce was not in the ``seen_nonces`` set.
-    ``invariant_pass`` — the external invariant supplied by the caller passed.
+    ``invariant_pass`` — literal boolean result of the external invariant.
 
     ``admissible``     — the conjunction of all six predicates.  Only when
                          this is True may the caller perform a state transition
@@ -289,9 +291,10 @@ def verify_evidence(
         before performing the state transition.
     invariant_pass:
         Result of whatever external system-level invariant check the caller has
-        already performed (e.g. InvariantPass(P, S_n)).  Separating this from
+        already performed (e.g. InvariantPass(P, S_n)). Separating this from
         the envelope verification ensures neither SDF nor the model can
-        manufacture an invariant result.
+        manufacture an invariant result. Only literal boolean ``True`` passes;
+        all other values fail closed.
 
     Returns
     -------
@@ -337,7 +340,7 @@ def verify_evidence(
 
     # --- 6. Invariant pass --------------------------------------------------
     if failed is None:
-        results["invariant_pass"] = bool(invariant_pass)
+        results["invariant_pass"] = invariant_pass is True
         if not results["invariant_pass"]:
             failed = "invariant_pass"
 
