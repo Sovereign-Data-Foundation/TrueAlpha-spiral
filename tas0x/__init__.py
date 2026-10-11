@@ -3,6 +3,7 @@
 from .agent import (
     AgentSnapshot,
     CommitResult,
+    EvidenceBinding,
     RuntimeHalted,
     TAS0XAgent,
     TAS0XResult,
@@ -12,6 +13,7 @@ from .agent import (
 __all__ = [
     "AgentSnapshot",
     "CommitResult",
+    "EvidenceBinding",
     "RuntimeHalted",
     "TAS0XAgent",
     "TAS0XResult",
