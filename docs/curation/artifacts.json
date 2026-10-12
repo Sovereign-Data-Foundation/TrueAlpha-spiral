@@ -1,0 +1,122 @@
+{
+  "format_version": "1",
+  "collection": "TAS_DNA",
+  "recorded_on": "2026-10-12",
+  "coverage": "Selected known artifacts; not a complete historical inventory",
+  "artifacts": [
+    {
+      "id": "canonical-workspace",
+      "kind": "repository",
+      "source_url": "https://github.com/Sovereign-Data-Foundation/TrueAlpha-spiral",
+      "source_revision": "7a1d9fa4cfe29ddf08a09e91589996f98b67fe0d",
+      "status": "observed",
+      "verification": "repository_metadata_and_documents_read",
+      "destination": "WORKSPACE.md"
+    },
+    {
+      "id": "explainer-snapshot",
+      "kind": "specification",
+      "source_url": "https://github.com/Sovereign-Data-Foundation/truealpha-spiral-explainer",
+      "source_revision": "ce1f567b0cb7672876df5ee48ff4c0e1c3d54236",
+      "status": "import_recorded_in_workspace",
+      "verification": "prior_workspace_reports_blob_identity_not_recomputed_in_this_change",
+      "destination": "docs/explainer"
+    },
+    {
+      "id": "prior-public-overview",
+      "kind": "historical_document",
+      "source_url": "https://github.com/Sovereign-Data-Foundation/TrueAlpha-spiral/blob/7a1d9fa4cfe29ddf08a09e91589996f98b67fe0d/README.md",
+      "source_revision": "7a1d9fa4cfe29ddf08a09e91589996f98b67fe0d",
+      "digest": {
+        "algorithm": "git-blob-sha1",
+        "value": "4b594e366b73b62813351c9577c0a6c5573a55a0"
+      },
+      "status": "preserved_snapshot",
+      "verification": "byte_identical_text_copy",
+      "destination": "docs/curation/prior-readme.txt"
+    },
+    {
+      "id": "sovereign-calc-original",
+      "kind": "archive",
+      "filename": "sovereign_calc_sealed.tar.gz",
+      "source_url": null,
+      "source_revision": null,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c594297b326c81f26b0fc36f20b8f0014a56ee761c314a4311f4d283455bce9d"
+      },
+      "status": "unrecovered",
+      "verification": "curator_reported_not_independently_reproduced",
+      "evidence_source": "Curator conversation, October 5–6 package record; no executable archive retrieved in this intake",
+      "destination": null,
+      "reported_files": [
+        {
+          "path": "sovereign.py",
+          "sha256": "958d934c0e64890a79216d97bd2258accb31ea9d518c4a40742b899ef90b1538"
+        },
+        {
+          "path": "demo.py",
+          "sha256": "7ab162236c08dbdef9d6a80cad69669e8f3b8ba9a685bde0ca36f0e1c00fce4f"
+        }
+      ],
+      "next_action": "Recover exact archive, verify digest and safe extraction, compare source digests, run demo; reconstruction must have a new identity"
+    },
+    {
+      "id": "witness-admission-extension",
+      "kind": "specification",
+      "source_url": null,
+      "source_revision": null,
+      "digest": null,
+      "status": "proposed",
+      "verification": "not_implemented_by_this_change",
+      "destination": "docs/curation/witness-transition.md"
+    },
+    {
+      "id": "gating-energy-evaluation",
+      "kind": "specification",
+      "source_url": null,
+      "source_revision": null,
+      "digest": null,
+      "status": "proposed",
+      "verification": "energy_unmeasured",
+      "destination": "docs/curation/energy-evaluation.md"
+    },
+    {
+      "id": "cycle-3-pr58-attestation",
+      "kind": "historical_attestation",
+      "source_url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/blob/d4fde5953523ef246493776916649d1c2a6a5066/ATTESTATIONS/2026-03-16_PR58_FORMAL_UPDATE_ATTESTATION.md",
+      "source_revision": "d4fde5953523ef246493776916649d1c2a6a5066",
+      "source_path": "ATTESTATIONS/2026-03-16_PR58_FORMAL_UPDATE_ATTESTATION.md",
+      "digest": {
+        "algorithm": "git-blob-sha1",
+        "value": "24f87e33b3b58558c6e0f1d3ee2c11a2aeef270a"
+      },
+      "status": "source_recovered_and_linked",
+      "verification": "github_metadata_and_source_read_not_runtime_or_signature_verified",
+      "destination": "docs/curation/cycle-3-pr58-attestation.md",
+      "pull_request": {
+        "url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/pull/58",
+        "merged": true,
+        "merge_commit": "57790f263aaa62ff8d6b0293ab328d5ba12aaac6",
+        "merged_at": "2026-01-02T18:38:44Z"
+      },
+      "declaration": {
+        "path": "Cycle_3_Initialization.md",
+        "digest": {
+          "algorithm": "git-blob-sha1",
+          "value": "71882ce953ead18c17d510e89320baa2618af3c7"
+        }
+      },
+      "stated_date": "2026-03-16",
+      "comment": {
+        "id": "4094461992",
+        "url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/pull/58#issuecomment-4094461992",
+        "stated_heading_date": "2026-03-16",
+        "created_at": "2026-03-19T23:57:55Z",
+        "updated_at": "2026-03-19T23:57:55Z"
+      },
+      "external_anchor_verification": "not_supplied_or_verified_in_this_intake",
+      "next_action": "Resolve stated/posted date distinction in public summaries; retain source; verify any future signed or independently timestamped anchor separately"
+    }
+  ]
+}
