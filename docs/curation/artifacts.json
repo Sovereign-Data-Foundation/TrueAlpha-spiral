@@ -1,7 +1,7 @@
 {
   "format_version": "1",
   "collection": "TAS_DNA",
-  "recorded_on": "2026-10-11",
+  "recorded_on": "2026-10-12",
   "coverage": "Selected known artifacts; not a complete historical inventory",
   "artifacts": [
     {
@@ -80,6 +80,43 @@
       "status": "proposed",
       "verification": "energy_unmeasured",
       "destination": "docs/curation/energy-evaluation.md"
+    },
+    {
+      "id": "cycle-3-pr58-attestation",
+      "kind": "historical_attestation",
+      "source_url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/blob/d4fde5953523ef246493776916649d1c2a6a5066/ATTESTATIONS/2026-03-16_PR58_FORMAL_UPDATE_ATTESTATION.md",
+      "source_revision": "d4fde5953523ef246493776916649d1c2a6a5066",
+      "source_path": "ATTESTATIONS/2026-03-16_PR58_FORMAL_UPDATE_ATTESTATION.md",
+      "digest": {
+        "algorithm": "git-blob-sha1",
+        "value": "24f87e33b3b58558c6e0f1d3ee2c11a2aeef270a"
+      },
+      "status": "source_recovered_and_linked",
+      "verification": "github_metadata_and_source_read_not_runtime_or_signature_verified",
+      "destination": "docs/curation/cycle-3-pr58-attestation.md",
+      "pull_request": {
+        "url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/pull/58",
+        "merged": true,
+        "merge_commit": "57790f263aaa62ff8d6b0293ab328d5ba12aaac6",
+        "merged_at": "2026-01-02T18:38:44Z"
+      },
+      "declaration": {
+        "path": "Cycle_3_Initialization.md",
+        "digest": {
+          "algorithm": "git-blob-sha1",
+          "value": "71882ce953ead18c17d510e89320baa2618af3c7"
+        }
+      },
+      "stated_date": "2026-03-16",
+      "comment": {
+        "id": "4094461992",
+        "url": "https://github.com/TrueAlpha-spiral/TrueAlpha-spiral/pull/58#issuecomment-4094461992",
+        "stated_heading_date": "2026-03-16",
+        "created_at": "2026-03-19T23:57:55Z",
+        "updated_at": "2026-03-19T23:57:55Z"
+      },
+      "external_anchor_verification": "not_supplied_or_verified_in_this_intake",
+      "next_action": "Resolve stated/posted date distinction in public summaries; retain source; verify any future signed or independently timestamped anchor separately"
     }
   ]
 }
