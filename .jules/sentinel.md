@@ -76,3 +76,8 @@
 **Vulnerability:** Position-dependent parsing of git arguments in `codex_tas_runner.py` allowed bypassing the restricted `-u` flag check for `git clone` by injecting a git global option like `--bare` before `clone`.
 **Learning:** Hardcoding token array offsets (like `cmd_tokens[idx+1] == 'clone'`) assumes a strict position for commands which is easily bypassed by valid git global options before the subcommand.
 **Prevention:** Iteratively parse tokens or search the token sequence (e.g., `'clone' in cmd_tokens`) to check if a specific subcommand is present instead of assuming an exact offset.
+
+## 2024-11-20 - [Fix Command Injection via Git Parser Differential]
+**Vulnerability:** A parser differential in `tas_pythonetics/src/tas_pythonetics/git_safety.py`'s `GitActionGuard` allowed bypassing restrictions by using unrecognized global flags (e.g. `git --unknown -c core.pager='!sh'`). The parser would skip over the unknown flag and misinterpret subsequent dangerous flags as harmless subcommand arguments.
+**Learning:** Security wrappers that manually parse command line arguments using an incomplete allowlist of global flags are vulnerable to parser differentials. If an attacker passes a valid flag that takes an argument but is missing from the allowlist, the wrapper's token alignment breaks, allowing subsequent dangerous flags to bypass checks.
+**Prevention:** When validating arguments before a subcommand, use a strict allowlist. Any unrecognized global flags must be explicitly rejected to maintain parser synchronization and prevent bypasses.
