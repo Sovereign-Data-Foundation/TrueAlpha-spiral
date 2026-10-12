@@ -87,18 +87,25 @@ class GitActionGuard:
             logger.warning(f"BLOCKED: Non-git command '{command}'")
             return False
 
-        # Locate the subcommand index
+        # Locate the subcommand index securely
         subcommand_idx = -1
         i = 1
         while i < len(tokens):
             if not tokens[i].startswith("-"):
                 subcommand_idx = i
                 break
-            # Skip argument for some common global options that take a value
-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+
+            # Known global options that take an argument
+            if tokens[i] in ("-C", "--work-tree", "--git-dir", "--namespace", "--super-prefix"):
                 i += 2
-            else:
+            elif tokens[i].startswith("-c") or tokens[i].startswith("--config") or tokens[i].startswith("--exec-path") or tokens[i].startswith("--ext-cmd") or tokens[i].startswith("--paginate") or tokens[i].startswith("--config-env"):
+                logger.warning(f"BLOCKED: Dangerous global option '{tokens[i]}'")
+                return False
+            elif tokens[i] in ("--bare", "--version", "--help", "--html-path", "--man-path", "--info-path", "-p", "--no-pager", "--no-replace-objects", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs"):
                 i += 1
+            else:
+                logger.warning(f"BLOCKED: Unrecognized git global option '{tokens[i]}'")
+                return False
 
         subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else None
 
