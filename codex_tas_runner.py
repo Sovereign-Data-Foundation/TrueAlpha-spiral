@@ -97,6 +97,34 @@ def _check_command(cmd_tokens):
                     return False, f"Unauthorized execution option '{arg}' for {cmd_name}"
 
     if cmd_name == 'git':
+        subcommand_idx = -1
+        i = idx + 1
+        while i < len(cmd_tokens):
+            if not cmd_tokens[i].startswith("-"):
+                subcommand_idx = i
+                break
+
+            # Explicitly block dangerous global options
+            if (cmd_tokens[i].startswith('-c') or cmd_tokens[i].startswith('--ext-cmd') or
+                cmd_tokens[i].startswith('--exec-path') or cmd_tokens[i].startswith('--config') or
+                cmd_tokens[i].startswith('--config-env') or cmd_tokens[i].startswith('--paginate')):
+                return False, f"Unauthorized git global option: {cmd_tokens[i]}"
+
+            # Allowlist known safe global options
+            if cmd_tokens[i] in ("-C", "--work-tree", "--git-dir", "--namespace", "--super-prefix"):
+                i += 2
+            elif cmd_tokens[i] in ("-p", "--no-pager", "--no-replace-objects", "--bare", "--version", "--help", "--info-path", "--no-lazy-fetch", "--literal-pathspecs", "--no-optional-locks"):
+                i += 1
+            elif "=" in cmd_tokens[i] and any(cmd_tokens[i].startswith(opt + "=") for opt in ("--work-tree", "--git-dir", "--namespace", "--super-prefix")):
+                i += 1
+            else:
+                return False, f"Unrecognized git global option: {cmd_tokens[i]}"
+
+        subcommand = cmd_tokens[subcommand_idx].lower() if subcommand_idx != -1 else None
+
+        if subcommand == "config":
+            return False, "Unauthorized git subcommand: config"
+
         safe_subcmd_seen = False
         for arg in cmd_tokens[idx+1:]:
             if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
@@ -109,6 +137,7 @@ def _check_command(cmd_tokens):
 
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
                             arg.startswith('--exec-path') or arg.startswith('--config') or
+                            arg.startswith('--config-env') or
                             arg.startswith('--paginate'))
             if is_dangerous and not safe_subcmd_seen:
                 return False, f"Unauthorized git option: {arg}"
