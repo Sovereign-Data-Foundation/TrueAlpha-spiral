@@ -97,20 +97,44 @@ def _check_command(cmd_tokens):
                     return False, f"Unauthorized execution option '{arg}' for {cmd_name}"
 
     if cmd_name == 'git':
-        safe_subcmd_seen = False
-        for arg in cmd_tokens[idx+1:]:
-            if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
-                safe_subcmd_seen = True
+        subcmd_idx = -1
+        i = idx + 1
+        SAFE_GLOBAL_OPTS = {'--version', '--help', '--bare', '--no-replace-objects'}
+        SAFE_GLOBAL_OPTS_WITH_ARGS = {'-C', '--git-dir', '--work-tree', '--namespace'}
+        while i < len(cmd_tokens):
+            if not cmd_tokens[i].startswith('-'):
+                subcmd_idx = i
+                break
+            if any(cmd_tokens[i].startswith(opt) for opt in ('-c', '--ext-cmd', '--exec-path', '--config', '--paginate', '--config-env')):
+                return False, f"Unauthorized git option: {cmd_tokens[i]}"
+            matched = False
+            for o in SAFE_GLOBAL_OPTS:
+                if cmd_tokens[i] == o or cmd_tokens[i].startswith(o + '='):
+                    matched = True
+                    break
+            if not matched:
+                for o in SAFE_GLOBAL_OPTS_WITH_ARGS:
+                    if cmd_tokens[i] == o:
+                        i += 1
+                        matched = True
+                        break
+                    elif cmd_tokens[i].startswith(o + '='):
+                        matched = True
+                        break
+            if not matched: return False, f"Unrecognized global option: {cmd_tokens[i]}"
+            i += 1
 
-            if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
-                return False, f"Unauthorized git option: {arg}"
-            if arg.startswith('-u') and 'clone' in cmd_tokens:
-                return False, f"Unauthorized git option: {arg}"
+        subcommand = cmd_tokens[subcmd_idx] if subcmd_idx != -1 else None
+        if subcommand == 'config': return False, "Unauthorized git subcommand: config"
+        safe_subcmd = subcommand in ('switch', 'checkout', 'commit', 'log', 'grep')
 
-            is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
-                            arg.startswith('--exec-path') or arg.startswith('--config') or
-                            arg.startswith('--paginate'))
-            if is_dangerous and not safe_subcmd_seen:
+        for i in range(idx+1, len(cmd_tokens)):
+            arg = cmd_tokens[i]
+            if arg.startswith('--upload-pack') or arg.startswith('--receive-pack') or (arg.startswith('-u') and subcommand == 'clone'):
+                return False, f"Unauthorized git option: {arg}"
+            if any(arg.startswith(opt) for opt in ('--ext-cmd', '--exec-path', '--config', '--paginate', '--config-env')):
+                return False, f"Unauthorized git option: {arg}"
+            if arg.startswith('-c') and not (safe_subcmd and i > subcmd_idx):
                 return False, f"Unauthorized git option: {arg}"
 
     return True, ""
