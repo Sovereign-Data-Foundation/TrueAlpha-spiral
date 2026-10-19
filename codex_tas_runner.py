@@ -99,8 +99,11 @@ def _check_command(cmd_tokens):
     if cmd_name == 'git':
         safe_subcmd_seen = False
         for arg in cmd_tokens[idx+1:]:
-            if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
+            if arg in ('switch', 'checkout', 'commit', 'log', 'grep', 'clone', 'pull', 'fetch'):
                 safe_subcmd_seen = True
+
+            if arg == 'config' and not safe_subcmd_seen:
+                return False, "Unauthorized git subcommand: config"
 
             if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
                 return False, f"Unauthorized git option: {arg}"

@@ -76,3 +76,7 @@
 **Vulnerability:** Position-dependent parsing of git arguments in `codex_tas_runner.py` allowed bypassing the restricted `-u` flag check for `git clone` by injecting a git global option like `--bare` before `clone`.
 **Learning:** Hardcoding token array offsets (like `cmd_tokens[idx+1] == 'clone'`) assumes a strict position for commands which is easily bypassed by valid git global options before the subcommand.
 **Prevention:** Iteratively parse tokens or search the token sequence (e.g., `'clone' in cmd_tokens`) to check if a specific subcommand is present instead of assuming an exact offset.
+## 2024-05-24 - Git Config Command Injection
+**Vulnerability:** Arbitrary command execution via `git config` overrides (e.g., `git config core.pager '!sh'`)
+**Learning:** Checking for safe subcommands without explicitly blocking the `config` subcommand allowed an attacker to execute arbitrary commands by leveraging Git's configuration capabilities to set executables like `core.pager`.
+**Prevention:** Explicitly block `config` from being used as a primary git subcommand in the command validation logic, ensuring to distinguish it from safe subcommand arguments.
