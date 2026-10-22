@@ -97,21 +97,39 @@ def _check_command(cmd_tokens):
                     return False, f"Unauthorized execution option '{arg}' for {cmd_name}"
 
     if cmd_name == 'git':
-        safe_subcmd_seen = False
-        for arg in cmd_tokens[idx+1:]:
-            if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
-                safe_subcmd_seen = True
+        # Locate the subcommand index
+        subcommand_idx = -1
+        i = idx + 1
+        while i < len(cmd_tokens):
+            if not cmd_tokens[i].startswith("-"):
+                subcommand_idx = i
+                break
+            # Skip argument for some common global options that take a value
+            if cmd_tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+                i += 2
+            else:
+                i += 1
+
+        subcommand = cmd_tokens[subcommand_idx] if subcommand_idx != -1 else None
+
+        for i in range(idx + 1, len(cmd_tokens)):
+            arg = cmd_tokens[i]
 
             if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
                 return False, f"Unauthorized git option: {arg}"
-            if arg.startswith('-u') and 'clone' in cmd_tokens:
+
+            if arg.startswith('-u') and subcommand == 'clone':
                 return False, f"Unauthorized git option: {arg}"
 
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
                             arg.startswith('--exec-path') or arg.startswith('--config') or
                             arg.startswith('--paginate'))
-            if is_dangerous and not safe_subcmd_seen:
-                return False, f"Unauthorized git option: {arg}"
+
+            # If it's a dangerous option, it is only allowed if it comes AFTER a safe subcommand
+            if is_dangerous:
+                safe_subcmd = subcommand in ('switch', 'checkout', 'commit', 'log', 'grep')
+                if not safe_subcmd or i < subcommand_idx:
+                    return False, f"Unauthorized git option: {arg}"
 
     return True, ""
 
