@@ -76,3 +76,7 @@
 **Vulnerability:** Position-dependent parsing of git arguments in `codex_tas_runner.py` allowed bypassing the restricted `-u` flag check for `git clone` by injecting a git global option like `--bare` before `clone`.
 **Learning:** Hardcoding token array offsets (like `cmd_tokens[idx+1] == 'clone'`) assumes a strict position for commands which is easily bypassed by valid git global options before the subcommand.
 **Prevention:** Iteratively parse tokens or search the token sequence (e.g., `'clone' in cmd_tokens`) to check if a specific subcommand is present instead of assuming an exact offset.
+## 2025-02-14 - Fix command filter bypass in `git` argument parsing
+**Vulnerability:** A logic flaw in `_check_command` allowed bypassing restrictions on dangerous flags (like `-c core.pager`) for `git` by simply including a safe subcommand string (e.g., `log`) anywhere in the arguments.
+**Learning:** Checking for the presence of a safe subcommand across *all* arguments (e.g., `arg in ('log', 'clone')`) creates a parser differential. Git flags can be passed to unsafe subcommands (e.g. `clone`), but a string like "log" can be passed as an argument to an unsafe command to satisfy the check without it actually being the subcommand.
+**Prevention:** Iteratively parse the arguments to precisely identify the actual subcommand, properly skipping known global options and their arguments before asserting safety constraints on that subcommand.
