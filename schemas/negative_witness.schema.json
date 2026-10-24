@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdf.local/schemas/negative_witness.schema.json",
+  "title": "TAS Historical Failure Negative Witness",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "witness_id", "failure_class", "observed_at", "source_artifact_hash", "evidence_hashes", "pattern_digest", "description", "attestations"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "witness_id": {"$ref": "#/$defs/hash"},
+    "failure_class": {"enum": ["UNTRACEABLE_GENERATION", "WITNESS_FABRICATION", "AUTHORITY_DISCONTINUITY", "STALE_EVIDENCE"]},
+    "observed_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "source_artifact_hash": {"$ref": "#/$defs/hash"},
+    "evidence_hashes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/hash"}},
+    "pattern_digest": {"$ref": "#/$defs/hash"},
+    "description": {"type": "string", "minLength": 1},
+    "attestations": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/attestation"}}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "key_id", "signed_at", "signature"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1},
+        "key_id": {"type": "string", "minLength": 1},
+        "signed_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "signature": {"type": "string", "pattern": "^[0-9a-f]{128}$"}
+      }
+    }
+  }
+}

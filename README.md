@@ -1,5 +1,9 @@
 # TrueAlphaSpiral (TAS_DNA)
 
+## Canonical workspace
+
+[Workspace map and consolidation ledger](./WORKSPACE.md) records the active home, imported source snapshots, and remaining intake.
+
 ![Architecture](https://img.shields.io/badge/Architecture-TAS__DNA-blue)
 ![Integrity](https://img.shields.io/badge/Integrity-Deterministic_Verification-brightgreen)
 ![Stage](https://img.shields.io/badge/Stage-Active-purple)
@@ -15,7 +19,7 @@ structured, authenticated, and maintained. TAS/SDF provides that bedrock.
 
 ### Documentation Map
 
-The SDF public-utility framing is distributed across four documents, each owning one layer of concern:
+The SDF public-utility framing is distributed across six documents, each owning one layer of concern:
 
 | Layer | Document | Description |
 |-------|----------|-------------|
@@ -24,6 +28,7 @@ The SDF public-utility framing is distributed across four documents, each owning
 | **API contract** | [API_REFERENCE.md](./API_REFERENCE.md) | Runtime primitives and the SDF Micro-Kernel interface, with `*(planned; not yet implemented)*` markers where applicable. |
 | **Sovereign-innovation mechanics** | [docs/specs/the_mechanics_of_sovereign_innovation.md](./docs/specs/the_mechanics_of_sovereign_innovation.md) | Five axioms of sovereign innovation and formal admissibility proofs. |
 | **IOC claim boundary** | [IOC_CLAIM_MANIFEST.md](./IOC_CLAIM_MANIFEST.md) | Frozen, status-labeled claims for the PR #49 baseline, with recomputation steps and explicitly deferred obligations. |
+| **Public campaign** | [docs/SDF_PUBLIC_CAMPAIGN.md](./docs/SDF_PUBLIC_CAMPAIGN.md) | Evidence-led messaging, audience strategy, claim discipline, and launch criteria for the Sovereign Data Foundation. |
 
 ## Enforceable AI Integrity via Deterministic Verification
 
