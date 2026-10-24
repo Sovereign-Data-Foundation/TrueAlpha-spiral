@@ -1,5 +1,4 @@
-import Mathlib.Data.List.Basic
-import Mathlib.Data.Nat.Basic
+import Mathlib
 
 --------------------------------------------------------------------------------
 -- LAYER 3: DUAL-LATTICE MERGE OPERATIONS (Φ)
