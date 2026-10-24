@@ -241,6 +241,27 @@ An unresolved decision likewise confers no effect authority and is recorded as u
 
 If recording fails, the attempt remains incomplete and MUST NOT authorize a protected effect. Durable refusal history cannot be guaranteed through unavailable or compromised storage. Tamper evidence, retention and availability are separate requirements.
 
+### Veracity and ambiguity do not compound alike
+
+The inductive ratchet preserves and extends authenticated lineage; it does not make every proposition in that lineage more truthful. This is the discrepancy to keep explicit: **compounding veracity** applies only to claims whose truth is established by adequate, relevant evidence, while **compounding ambiguity** occurs when unresolved claims, missing dependencies, or limitations are carried forward without resolution. Repetition, hashing, signatures, and additional links can strengthen evidence that a statement was made and preserved; none alone establishes that the statement describes reality.
+
+$$
+\operatorname{VerifiedSignature}(r)
+\not\Rightarrow
+\operatorname{True}(\operatorname{claim}(r)).
+$$
+
+The distinction recurs at every architectural stratum:
+
+| Stratum | What can compound | What does not follow |
+|---|---|---|
+| Process Science | Verified authority bindings and the record of which predicates were evaluated | A valid signature alone does not prove key custody, human comprehension, or claim truth |
+| Algorithmic Dendrology | Ancestry and distinct histories remain reconstructible | A longer or convergent history does not establish the truth of its claims |
+| Cursive Computation | Admissions, refusals, and unresolved attempts can be retained as lineage | Appending an unresolved record does not resolve it; repeated or correlated witnesses are not independent confirmation |
+| Mechanical enforcement | A deterministic verdict can be reproduced for its bound inputs and policy versions | The verdict proves only the predicates actually checked, not omitted assumptions or external facts |
+
+Accordingly, each recursive layer MUST preserve the scope and unresolved status of inherited claims. A downstream result MUST NOT promote `UNKNOWN` to verified merely because an upstream record is authenticated, repeated, or incorporated into a hash chain. Resolution requires new evidence that is relevant to the claim and independently sufficient under the applicable policy; otherwise the uncertainty remains explicit and ordinary protected transitions stay closed where that predicate is required. A refusal can therefore improve the veracity of the process record—by documenting that a gate refused—while the underlying proposition remains ambiguous.
+
 ## 6. Domain IV — Mechanical enforcement
 
 ### Calculator Doctrine
