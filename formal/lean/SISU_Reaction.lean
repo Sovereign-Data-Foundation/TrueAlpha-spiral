@@ -200,3 +200,137 @@ theorem financial_transition_preserves_operational_lineage
   split_ifs
   · rfl
   · rfl
+
+--------------------------------------------------------------------------------
+-- MULTI-SIG OPERATOR AUTHORIZATION GATE
+--------------------------------------------------------------------------------
+
+-- Number of distinct authorized operators that approved (counting over the
+-- authorized set means duplicate approvals cannot inflate the quorum).
+def quorumCount (authorized approvals : List Nat) : Nat :=
+  (authorized.filter (fun s => approvals.contains s)).length
+
+-- Fail-closed: any missing evidence/SMT/revocation failure takes precedence;
+-- a missing quorum yields INDETERMINATE and never VERIFIED.
+def evalAdmissionGateMultiSig
+    (hasEvidence smtValid isRevoked : Bool)
+    (authorized approvals : List Nat) (threshold : Nat) : AdmissionGateState :=
+  match evalAdmissionGate hasEvidence smtValid isRevoked with
+  | AdmissionGateState.VERIFIED =>
+      if threshold ≤ quorumCount authorized approvals ∧ 0 < threshold then
+        AdmissionGateState.VERIFIED
+      else AdmissionGateState.INDETERMINATE
+  | other => other
+
+theorem multisig_verified_implies_quorum
+    (e s r : Bool) (authorized approvals : List Nat) (threshold : Nat) :
+    evalAdmissionGateMultiSig e s r authorized approvals threshold = AdmissionGateState.VERIFIED →
+    threshold ≤ quorumCount authorized approvals ∧ 0 < threshold := by
+  intro h
+  unfold evalAdmissionGateMultiSig at h
+  cases hg : evalAdmissionGate e s r <;> rw [hg] at h <;> simp at h
+  all_goals (first | exact h | (split at h <;> simp_all))
+
+--------------------------------------------------------------------------------
+-- GLOBAL VALUE PRESERVATION
+--------------------------------------------------------------------------------
+
+def artValue (a : ArtifactFinancialState) : Nat :=
+  a.balances.liquid + a.balances.escrow
+
+def totalValue (fs : FinancialState) : Nat :=
+  (fs.artifacts.map artValue).foldl (· + ·) 0 + fs.treasury
+
+-- Accrual is the only action that mints value; all others are conservative.
+def FinancialAction.isConservative : FinancialAction → Bool
+  | FinancialAction.accrueRoyalty _ _ => false
+  | _ => true
+
+theorem foldl_add_acc (l : List Nat) (acc : Nat) :
+    l.foldl (· + ·) acc = acc + l.foldl (· + ·) 0 := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl]
+    rw [ih (acc + x), ih (0 + x)]
+    omega
+
+theorem map_value_preserved (f : ArtifactFinancialState → ArtifactFinancialState)
+    (h : ∀ a, artValue (f a) = artValue a) (l : List ArtifactFinancialState) :
+    ((l.map f).map artValue).foldl (· + ·) 0 = (l.map artValue).foldl (· + ·) 0 := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.map, List.foldl]
+    rw [foldl_add_acc _ (0 + artValue (f x)), foldl_add_acc _ (0 + artValue x), ih, h]
+
+theorem trigger_preserves_value (id : Nat) (fs : FinancialState) :
+    totalValue (transitionFinancialState (FinancialAction.triggerDispute id) fs) = totalValue fs := by
+  unfold totalValue transitionFinancialState
+  simp only []
+  rw [map_value_preserved]
+  intro a
+  split <;> simp [artValue]
+
+theorem exonerate_preserves_value (id : Nat) (fs : FinancialState) :
+    totalValue (transitionFinancialState (FinancialAction.resolveExonerated id) fs) = totalValue fs := by
+  unfold totalValue transitionFinancialState
+  simp only []
+  rw [map_value_preserved]
+  intro a
+  split <;> simp [artValue]
+
+-- Slashed escrow moves to treasury unit-for-unit.
+theorem forfeit_aux (id : Nat) (l : List ArtifactFinancialState) (acc : Nat) :
+    (((l.map fun art =>
+        if art.id == id && art.dispute == DisputeState.DISPUTED then
+          { art with dispute := DisputeState.FORFEITED,
+                     balances := { art.balances with escrow := 0 } }
+        else art).map artValue).foldl (· + ·) 0)
+      + (l.foldl (fun acc art =>
+          if art.id == id && art.dispute == DisputeState.DISPUTED
+          then acc + art.balances.escrow else acc) acc)
+    = (l.map artValue).foldl (· + ·) 0 + acc := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map, List.foldl]
+    rw [foldl_add_acc _ (0 + _), foldl_add_acc _ (0 + artValue x)]
+    split
+    · have := ih (acc + x.balances.escrow)
+      simp only [artValue] at this ⊢
+      omega
+    · have := ih acc
+      simp only [artValue] at this ⊢
+      omega
+
+theorem forfeit_preserves_value (id : Nat) (fs : FinancialState) :
+    totalValue (transitionFinancialState (FinancialAction.resolveForfeited id) fs) = totalValue fs := by
+  unfold totalValue transitionFinancialState
+  simp only []
+  have := forfeit_aux id fs.artifacts 0
+  omega
+
+theorem conservative_step_preserves_value (action : FinancialAction) (fs : FinancialState)
+    (h : action.isConservative = true) :
+    totalValue (transitionFinancialState action fs) = totalValue fs := by
+  cases action with
+  | triggerDispute id => exact trigger_preserves_value id fs
+  | resolveExonerated id => exact exonerate_preserves_value id fs
+  | resolveForfeited id => exact forfeit_preserves_value id fs
+  | accrueRoyalty id amt => simp [FinancialAction.isConservative] at h
+
+def runActions : List FinancialAction → FinancialState → FinancialState
+  | [], fs => fs
+  | a :: as, fs => runActions as (transitionFinancialState a fs)
+
+-- Multi-step: any sequence of conservative actions preserves total value.
+theorem run_conservative_preserves_value (actions : List FinancialAction) (fs : FinancialState)
+    (h : ∀ a ∈ actions, a.isConservative = true) :
+    totalValue (runActions actions fs) = totalValue fs := by
+  induction actions generalizing fs with
+  | nil => rfl
+  | cons a as ih =>
+    simp only [runActions]
+    rw [ih _ (fun b hb => h b (List.mem_cons_of_mem a hb)),
+        conservative_step_preserves_value a fs (h a (List.mem_cons_self a as))]
