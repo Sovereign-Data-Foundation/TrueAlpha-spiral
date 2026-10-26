@@ -97,17 +97,37 @@ def _check_command(cmd_tokens):
                     return False, f"Unauthorized execution option '{arg}' for {cmd_name}"
 
     if cmd_name == 'git':
-        safe_subcmd_seen = False
+        i = idx + 1
+        subcommand = None
+        while i < len(cmd_tokens):
+            arg = cmd_tokens[i]
+            if not arg.startswith('-'):
+                subcommand = arg
+                break
+
+            is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
+                            arg.startswith('--exec-path') or arg.startswith('--config') or
+                            arg.startswith('--config-env') or
+                            arg.startswith('--paginate'))
+            if is_dangerous:
+                return False, f"Unauthorized git option: {arg}"
+
+            if arg in ('--version', '--help', '--info-path', '--html-path', '--man-path', '--no-pager', '--bare'):
+                i += 1
+            elif arg in ('-C', '--git-dir', '--work-tree', '--namespace'):
+                i += 2
+            else:
+                return False, f"Unrecognized git global option: {arg}"
+
+        safe_subcmd_seen = (subcommand in ('switch', 'checkout', 'commit', 'log', 'grep'))
+
+        if subcommand == 'config':
+            return False, f"Unauthorized git subcommand: {subcommand}"
+
         for arg in cmd_tokens[idx+1:]:
-            if arg in ('switch', 'checkout', 'commit', 'log', 'grep'):
-                safe_subcmd_seen = True
-
-            if arg == 'config' and not safe_subcmd_seen:
-                return False, f"Unauthorized git subcommand: {arg}"
-
             if arg.startswith('--upload-pack') or arg.startswith('--receive-pack'):
                 return False, f"Unauthorized git option: {arg}"
-            if arg.startswith('-u') and 'clone' in cmd_tokens:
+            if arg.startswith('-u') and subcommand == 'clone':
                 return False, f"Unauthorized git option: {arg}"
 
             is_dangerous = (arg.startswith('-c') or arg.startswith('--ext-cmd') or
