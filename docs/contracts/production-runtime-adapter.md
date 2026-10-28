@@ -60,3 +60,15 @@ docker run --rm --network none \
 
 The process exits nonzero for every gate failure. On success it writes both
 `prod_verification_receipt.json` and its detached signature to the output mount.
+
+## Unified state-lineage transition
+
+The production adapter's attestation check is the outer boundary. Inside the
+runtime, `UniversalVerifierKernel` applies the stricter transition contract:
+`(OperationalState, LineageTimeline)` is processed as one pair. Human authority
+signs a domain-separated action, payload hash, scope set, and revocation nonce;
+that authority is distinct from the state's allowed capability set. Both gates,
+the expected parent receipt hash, simulation containment, and the post-state
+non-expansion invariant must pass before state may change. Every outcome emits a
+terminal receipt and advances the receipt-hash lineage; a refusal retains the
+identical operational state and records its violation.
