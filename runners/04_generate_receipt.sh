@@ -7,6 +7,25 @@ RECEIPT_FILE="${ARTIFACT_OUT_DIR}/prod_verification_receipt.json"
 SIGNATURE_FILE="${ARTIFACT_OUT_DIR}/prod_verification_receipt.sig"
 mkdir -p "${ARTIFACT_OUT_DIR}"
 
+# Receipt generation is fail-closed too: it cannot manufacture a passing
+# artifact unless every preceding runner recorded its required evidence.
+python - <<'EVIDENCE'
+import os
+from pathlib import Path
+
+root = Path(os.environ["TEST_LOG_DIR"])
+required = {
+    "receipt_checks.log": lambda text: text.count('"status": "OK"') == 6,
+    "benchmarks.log": lambda text: text.count('"status": "PASS"') == 15
+    and '{"competing_committed": true, "conflict_code": "ERR_OCC_STALE_READ", "stale_rejected": true}' in text,
+    "fault_tests.log": lambda text: text.count('"status": "REJECTED"') == 5,
+}
+for name, predicate in required.items():
+    path = root / name
+    if not path.is_file() or not predicate(path.read_text(encoding="utf-8")):
+        raise SystemExit(f"[FATAL] required successful evidence is missing or invalid: {path}")
+EVIDENCE
+
 execution_digest=$(TEST_LOG_DIR="${TEST_LOG_DIR}" python - <<'PY'
 import hashlib, os
 from pathlib import Path
@@ -21,8 +40,8 @@ print(h.hexdigest())
 PY
 )
 
-SIGNATURE_STATUS="unsigned"
-[[ -f "${KEY_FILE}" ]] && SIGNATURE_STATUS="signed"
+[[ -f "${KEY_FILE}" ]] || { echo "[FATAL] Gate signing key is required for qualification evidence: ${KEY_FILE}" >&2; exit 1; }
+SIGNATURE_STATUS="signed"
 RECEIPT_FILE="${RECEIPT_FILE}" EXECUTION_DIGEST="${execution_digest}" \
 ADAPTER_SOCKET="${ADAPTER_SOCKET}" SIGNATURE_STATUS="${SIGNATURE_STATUS}" python - <<'PY'
 import json, os
@@ -30,20 +49,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 receipt = {
     "environment": {"adapter_socket": os.environ["ADAPTER_SOCKET"], "network": "isolated_none", "runtime": "production"},
+    "evidence_schema": "tas-production-gate-receipt-v0.1",
     "execution_digest": "sha256:" + os.environ["EXECUTION_DIGEST"],
     "gate_version": "v0.1",
     "results": {"negative_specimens_rejected": "5/5", "occ_race_invariants_preserved": True, "receipt_checks": "6/6", "specimen_benchmarks": "15/15"},
     "signature_status": os.environ["SIGNATURE_STATUS"],
+    "signature_algorithm": "openssl-pkeyutl/raw",
     "status": "QUALIFIED",
     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
 }
 Path(os.environ["RECEIPT_FILE"]).write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 PY
 
-if [[ -f "${KEY_FILE}" ]]; then
-    openssl pkeyutl -sign -rawin -inkey "${KEY_FILE}" -in "${RECEIPT_FILE}" -out "${SIGNATURE_FILE}"
-else
-    rm -f "${SIGNATURE_FILE}"
-    echo "[PHASE 4] Warning: qualification receipt is unsigned." >&2
-fi
+openssl pkeyutl -sign -rawin -inkey "${KEY_FILE}" -in "${RECEIPT_FILE}" -out "${SIGNATURE_FILE}"
 echo "[PHASE 4] Receipt written to ${RECEIPT_FILE}."
