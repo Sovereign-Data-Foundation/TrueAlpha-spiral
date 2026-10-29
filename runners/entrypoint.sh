@@ -7,6 +7,7 @@ export WORKDIR="${WORKDIR:-${VERIFY_ROOT}/workdir}"
 export ARTIFACT_OUT_DIR="${ARTIFACT_OUT_DIR:-/opt/tas/output}"
 export ADAPTER_SOCKET="${ADAPTER_SOCKET:-/run/prod_runtime.sock}"
 export PROD_RUNTIME_BIN="${PROD_RUNTIME_BIN:-/opt/tas/bin/prod_runtime}"
+export VERIFIER_PUBLIC_KEY_FILE="${VERIFIER_PUBLIC_KEY_FILE:-/opt/tas/certs/verifier_public_key.hex}"
 export ADAPTER_BIN="${ADAPTER_BIN:-/opt/tas/bin/runtime_adapter}"
 export TEST_LOG_DIR="${TEST_LOG_DIR:-${WORKDIR}/logs}"
 
@@ -38,9 +39,10 @@ echo "[SUPERVISOR] Starting isolated production-runtime verification suite"
 
 [[ -x "${PROD_RUNTIME_BIN}" ]] || { echo "[FATAL] Runtime is not executable: ${PROD_RUNTIME_BIN}" >&2; exit 1; }
 [[ -x "${ADAPTER_BIN}" ]] || { echo "[FATAL] Adapter is not executable: ${ADAPTER_BIN}" >&2; exit 1; }
+[[ -r "${VERIFIER_PUBLIC_KEY_FILE}" ]] || { echo "[FATAL] Verifier public key is unavailable: ${VERIFIER_PUBLIC_KEY_FILE}" >&2; exit 1; }
 rm -f "${ADAPTER_SOCKET}"
 "${PROD_RUNTIME_BIN}" --socket-path="${ADAPTER_SOCKET}" --ephemeral \
-    --storage-dir="${WORKDIR}/runtime_store" >"${TEST_LOG_DIR}/runtime.log" 2>&1 &
+    --public-key-file="${VERIFIER_PUBLIC_KEY_FILE}" --storage-dir="${WORKDIR}/runtime_store" >"${TEST_LOG_DIR}/runtime.log" 2>&1 &
 RUNTIME_PID=$!
 
 for _ in {1..100}; do
