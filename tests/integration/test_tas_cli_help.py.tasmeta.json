@@ -1,0 +1,29 @@
+{
+  "id": "99d4660d92b903f877aeeb8c8717a15545af6af452e676d079fec430d5664425",
+  "type": "TasArtifact",
+  "form_id": "bb0d564b9a5a3e48e29c7d385e37ee90c831f488db7beb23341aec2c3eafc603",
+  "genome_id": "TAS_GENOME_V1",
+  "lineage_id": "99d4660d92b903f877aeeb8c8717a15545af6af452e676d079fec430d5664425",
+  "h_seed": "Russell Nordland",
+  "cert_id": "a3f5c891-7d20-4b3e-9e12-84f0c2a61d37",
+  "timestamp": "2026-08-16T00:44:07.900000+00:00",
+  "paradata_trail": [
+    {
+      "event": "lineage_repair",
+      "repair_type": "forward_repair_receipt",
+      "repaired_at": "2026-08-16T00:44:07.900000+00:00",
+      "superseded_lineage_id": "67892c824fc820e87ea25f42dd3e32f572a88e1e29309bc3be132712c144f6b2",
+      "superseded_reason": "Non-reproducible lineage: committed value 67892c82... cannot be reconstructed from committed inputs via SHA256(form_id||prev_lineage||h_seed||timestamp||genome_id). Verified mismatch documented in PR #293 Codex review thread.",
+      "repair_parent": "5fff21e2cb4f47f23d41958d4bfeb0ee709837ecc437db04912889d6ba6e1552",
+      "repair_parent_provenance": "Last reproducible lineage_id from pre-PR-293 sidecar ancestry",
+      "note": "Repair anchored explicitly to last verified parent; does not extend broken chain"
+    }
+  ],
+  "signatures": [
+    {
+      "signer": "Russell Nordland",
+      "algorithm": "TAS_HUMAN_SIG_V1",
+      "value": "signed_by_ceremony"
+    }
+  ]
+}
