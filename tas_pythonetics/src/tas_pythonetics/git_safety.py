@@ -91,14 +91,31 @@ class GitActionGuard:
         subcommand_idx = -1
         i = 1
         while i < len(tokens):
-            if not tokens[i].startswith("-"):
+            arg = tokens[i]
+            if not arg.startswith("-"):
                 subcommand_idx = i
                 break
-            # Skip argument for some common global options that take a value
-            if tokens[i] in ("-C", "-c", "--work-tree", "--git-dir", "--namespace"):
+
+            # Check for known dangerous options directly when parsing. We don't skip them.
+            is_dangerous = (arg.startswith("-c") or
+                            arg.startswith("--ext-cmd") or
+                            arg.startswith("--exec-path") or
+                            arg.startswith("--config") or
+                            arg.startswith("--config-env") or
+                            arg.startswith("--paginate") or
+                            arg == "-p" or arg.startswith("-p="))
+
+            if is_dangerous:
+                logger.warning(f"BLOCKED: Dangerous global option '{arg}'")
+                return False
+
+            if arg in ('--version', '--help', '--info-path', '--html-path', '--man-path', '--no-pager', '--bare'):
+                i += 1
+            elif arg in ('-C', '--git-dir', '--work-tree', '--namespace'):
                 i += 2
             else:
-                i += 1
+                logger.warning(f"BLOCKED: Unrecognized git global option '{arg}'")
+                return False
 
         subcommand = tokens[subcommand_idx].lower() if subcommand_idx != -1 else None
 
