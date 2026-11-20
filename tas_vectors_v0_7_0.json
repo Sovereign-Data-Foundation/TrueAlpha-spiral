@@ -1,0 +1,74 @@
+{
+  "version": "0.7.0",
+  "families": {
+    "settlement": [
+      {
+        "id": "tie-contested",
+        "pool": 3,
+        "shares": [
+          {"artifact_id": "b", "bps": 5000, "contested": false},
+          {"artifact_id": "a", "bps": 5000, "contested": true}
+        ],
+        "expected": {
+          "settled": [{"artifact_id": "b", "amount": 1}],
+          "escrow": [{"artifact_id": "a", "amount": 2}],
+          "legal_reserve": 0
+        }
+      },
+      {
+        "id": "ranking-and-zero",
+        "pool": 2,
+        "shares": [
+          {"artifact_id": "c", "bps": 2000, "contested": false},
+          {"artifact_id": "b", "bps": 4000, "contested": false},
+          {"artifact_id": "a", "bps": 4000, "contested": false}
+        ],
+        "expected": {
+          "settled": [{"artifact_id": "c", "amount": 0}, {"artifact_id": "b", "amount": 1}, {"artifact_id": "a", "amount": 1}],
+          "escrow": [],
+          "legal_reserve": 0
+        }
+      },
+      {
+        "id": "zero-pool",
+        "pool": 0,
+        "shares": [
+          {"artifact_id": "z", "bps": 0, "contested": true},
+          {"artifact_id": "x", "bps": 10000, "contested": true}
+        ],
+        "expected": {
+          "settled": [],
+          "escrow": [{"artifact_id": "z", "amount": 0}, {"artifact_id": "x", "amount": 0}],
+          "legal_reserve": 0
+        }
+      }
+    ],
+    "uint64_ledger": [
+      {
+        "id": "small",
+        "ledger": {"r_gross": 10, "r_legal": 1, "r_infra": 2, "r_dist": 7, "liquid_sum": 2, "escrow_sum": 5, "escrow_bal": 5},
+        "expected": true
+      },
+      {
+        "id": "max-field",
+        "ledger": {"r_gross": 0, "r_legal": 18446744073709551615, "r_infra": 0, "r_dist": 0, "liquid_sum": 0, "escrow_sum": 0, "escrow_bal": 0},
+        "expected": true
+      },
+      {
+        "id": "field-overflow",
+        "ledger": {"r_gross": 0, "r_legal": 18446744073709551616, "r_infra": 0, "r_dist": 0, "liquid_sum": 0, "escrow_sum": 0, "escrow_bal": 0},
+        "expected": false
+      },
+      {
+        "id": "gross-product-last-safe",
+        "ledger": {"r_gross": 12297829382473034, "r_legal": 0, "r_infra": 0, "r_dist": 0, "liquid_sum": 0, "escrow_sum": 0, "escrow_bal": 0},
+        "expected": true
+      },
+      {
+        "id": "gross-product-overflow",
+        "ledger": {"r_gross": 12297829382473035, "r_legal": 0, "r_infra": 0, "r_dist": 0, "liquid_sum": 0, "escrow_sum": 0, "escrow_bal": 0},
+        "expected": false
+      }
+    ]
+  }
+}

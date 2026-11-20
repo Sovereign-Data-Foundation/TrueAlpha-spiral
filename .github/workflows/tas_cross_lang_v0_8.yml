@@ -1,0 +1,29 @@
+name: TAS cross-language arithmetic
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  arithmetic:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/tas_pythonetics/src:${{ github.workspace }}/tas-recursion-conversion:${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install -r requirements-dev.txt
+      - uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee # v1.7.1
+        with:
+          auto-config: "false"
+          build: "true"
+          test: "false"
+          use-github-cache: "false"
+      - run: lake exe conformance tas_vectors_v0_7_0.json
+      - run: python3 -m unittest discover -s tests
+      - run: python3 run_vectors.py tas_vectors_v0_7_0.json

@@ -1,0 +1,5 @@
+{"log":
+ [{"message":
+   ".> LEAN_PATH=././.lake/build/lib LD_LIBRARY_PATH= /home/runner/lean-4.11.0-linux/bin/lean ././././SISU/Reaction.lean -R ./././. -o ././.lake/build/lib/SISU/Reaction.olean -i ././.lake/build/lib/SISU/Reaction.ilean -c ././.lake/build/ir/SISU/Reaction.c --json",
+   "level": "trace"}],
+ "depHash": "5980578451341733323"}
