@@ -1,0 +1,10 @@
+name = "SISU"
+defaultTargets = ["SISU"]
+
+[[lean_lib]]
+name = "SISU"
+roots = ["SISU.Reaction"]
+
+[[lean_exe]]
+name = "conformance"
+root = "SISU.Conformance.Runner"

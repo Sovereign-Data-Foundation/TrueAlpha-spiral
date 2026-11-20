@@ -3,15 +3,20 @@ import Lean
 /-!
 # Abstract partial reaction model
 
-This module contains pure settlement and ledger arithmetic only. It does not
-implement admission, escrow release authorization, Ed25519, proof verification,
-nonce replay protection, or an allocation digest. Candidate arithmetic is not
-authority to modify a real ledger. Amounts are unbounded natural numbers, not
-256-bit machine arithmetic. This is not a production conformance kernel and
-does not establish cryptographic or 256-bit parity.
+This module contains pure settlement and ledger arithmetic and an abstract
+spent-token transition relation. Its trusted check predicates are assumptions,
+not implementations of admission, authorization, Ed25519 or proof verification.
+It does not implement a durable atomic commit or an allocation digest. Candidate
+arithmetic is not authority to modify a real ledger. Amounts are unbounded
+natural numbers, not 256-bit machine arithmetic. This is not a production
+conformance kernel and does not establish cryptographic or 256-bit parity.
 -/
 
 namespace SISU.Reaction
+
+/-- A configured anchor, not a claim that any root was computed from a proof. -/
+def configuredAnchor : String :=
+  "6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b"
 
 structure Share where
   artifactId : String
@@ -136,6 +141,139 @@ def fromUInt64Ledger (l : EpochLedger64) : EpochLedger :=
     liquid_sum := l.liquid_sum.toNat, escrow_sum := l.escrow_sum.toNat,
     escrow_bal := l.escrow_bal.toNat }
 
+theorem toUInt64Ledger_roundtrip {ledger : EpochLedger} {converted : EpochLedger64}
+    (h : toUInt64Ledger ledger = some converted) :
+    fromUInt64Ledger converted = ledger := by
+  unfold toUInt64Ledger at h
+  dsimp only at h
+  split at h
+  next bounds =>
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at bounds
+    rcases bounds with ⟨⟨⟨⟨⟨⟨⟨_, hgross⟩, hlegal⟩, hinfra⟩, hdist⟩, hliquid⟩, hescrow⟩, hbal⟩
+    cases h
+    cases ledger
+    simp_all [fromUInt64Ledger, UInt64.toNat_ofNat_of_lt, UInt64.size]
+  next => contradiction
+
+/-- Compute the natural-number candidate and convert it only when every result
+    field and the existing gross intermediate guard fit. This is not native
+    UInt64 arithmetic and does not assert 256-bit equivalence. -/
+def ledgerCandidate64 (ledger : EpochLedger64) (delta : UInt64) (upheld : Bool) :
+    Option EpochLedger64 :=
+  (ledgerCandidate (fromUInt64Ledger ledger) delta.toNat upheld).bind toUInt64Ledger
+
+theorem ledgerCandidate64_spec (ledger : EpochLedger64) (delta : UInt64)
+    (upheld : Bool) (result : EpochLedger64) :
+    ledgerCandidate64 ledger delta upheld = some result ↔
+      ∃ candidate, ledgerCandidate (fromUInt64Ledger ledger) delta.toNat upheld = some candidate ∧
+        toUInt64Ledger candidate = some result := by
+  unfold ledgerCandidate64
+  cases h : ledgerCandidate (fromUInt64Ledger ledger) delta.toNat upheld with
+  | none => simp [h]
+  | some candidate => simp [h]
+
+theorem ledgerCandidate64_sound (ledger : EpochLedger64) (delta : UInt64)
+    (upheld : Bool) (result : EpochLedger64)
+    (h : ledgerCandidate64 ledger delta upheld = some result) :
+    ledgerCandidate (fromUInt64Ledger ledger) delta.toNat upheld =
+      some (fromUInt64Ledger result) := by
+  obtain ⟨candidate, hc, hconvert⟩ := (ledgerCandidate64_spec ledger delta upheld result).1 h
+  rw [toUInt64Ledger_roundtrip hconvert]
+  exact hc
+
+/-- Core Lean does not provide mathlib's Set; sets here are predicates. -/
+abbrev Set (α : Type) := α → Prop
+
+instance {α : Type} : Membership α (Set α) := ⟨fun x s => s x⟩
+
+/-- Tokens contain only a nonce: two uses of the same nonce are the same token,
+    irrespective of the rest of the proposed settlement. Nonces are global
+    within the modeled spent set. -/
+structure SettlementToken where
+  nonce : String
+  deriving Repr, DecidableEq
+
+/-- These predicates stand for trusted external checks, not computed verifiers.
+    They may depend on the complete transition being authorized. -/
+structure SettlementChecks where
+  signature : EpochLedger → SettlementToken → Nat → Bool → Prop
+  proof : EpochLedger → SettlementToken → Nat → Bool → Prop
+  authorization : EpochLedger → SettlementToken → Nat → Bool → Prop
+
+structure LedgerState where
+  ledger : EpochLedger
+  spent : Set SettlementToken
+
+/-- Γ is the set of admitted tokens; freshness is checked separately against
+    the state's spent set. None of the trusted checks is a caller Boolean. -/
+structure ValidLedgerSettlement (Γ : Set SettlementToken) (checks : SettlementChecks)
+    (state : LedgerState) (token : SettlementToken) (delta : Nat) (upheld : Bool)
+    (candidate : EpochLedger) : Prop where
+  admitted : token ∈ Γ
+  fresh : token ∉ state.spent
+  signature : checks.signature state.ledger token delta upheld
+  proof : checks.proof state.ledger token delta upheld
+  authorization : checks.authorization state.ledger token delta upheld
+  candidate_eq : ledgerCandidate state.ledger delta upheld = some candidate
+
+/-- A successful abstract transition updates the ledger and spent set together. -/
+def LedgerSettlement (Γ : Set SettlementToken) (checks : SettlementChecks)
+    (state : LedgerState) (token : SettlementToken) (delta : Nat) (upheld : Bool)
+    (next : LedgerState) : Prop :=
+  ∃ candidate, ValidLedgerSettlement Γ checks state token delta upheld candidate ∧
+    next.ledger = candidate ∧
+    ∀ t, t ∈ next.spent ↔ t = token ∨ t ∈ state.spent
+
+/-- The modeled update is total; it represents a successful transition only
+    when accompanied by a proof of validity. -/
+def consumeSettlement (state : LedgerState) (token : SettlementToken)
+    (candidate : EpochLedger) : LedgerState :=
+  { ledger := candidate, spent := fun t => t = token ∨ t ∈ state.spent }
+
+theorem valid_settlement_succeeds {Γ : Set SettlementToken} {checks : SettlementChecks}
+    {state : LedgerState} {token : SettlementToken} {delta : Nat} {upheld : Bool}
+    {candidate : EpochLedger}
+    (valid : ValidLedgerSettlement Γ checks state token delta upheld candidate) :
+    LedgerSettlement Γ checks state token delta upheld (consumeSettlement state token candidate) := by
+  exact ⟨candidate, valid, rfl, fun _ => Iff.rfl⟩
+
+theorem settlement_consumes_token {Γ : Set SettlementToken} {checks : SettlementChecks}
+    {state next : LedgerState} {token : SettlementToken} {delta : Nat} {upheld : Bool}
+    (h : LedgerSettlement Γ checks state token delta upheld next) :
+    token ∈ next.spent := by
+  rcases h with ⟨_, _, _, spent⟩
+  exact (spent token).2 (Or.inl rfl)
+
+theorem settlement_preserves_spent {Γ : Set SettlementToken} {checks : SettlementChecks}
+    {state next : LedgerState} {token old : SettlementToken} {delta : Nat} {upheld : Bool}
+    (h : LedgerSettlement Γ checks state token delta upheld next)
+    (oldSpent : old ∈ state.spent) : old ∈ next.spent := by
+  rcases h with ⟨_, _, _, spent⟩
+  exact (spent old).2 (Or.inr oldSpent)
+
+theorem settlement_cannot_replay {Γ Γ' : Set SettlementToken}
+    {checks checks' : SettlementChecks} {state next after : LedgerState}
+    {token : SettlementToken} {delta delta' : Nat} {upheld upheld' : Bool}
+    (h : LedgerSettlement Γ checks state token delta upheld next) :
+    ¬ LedgerSettlement Γ' checks' next token delta' upheld' after := by
+  intro replay
+  rcases replay with ⟨_, valid, _, _⟩
+  exact valid.fresh (settlement_consumes_token h)
+
+theorem settlement_cannot_replay_nonce {Γ Γ' : Set SettlementToken}
+    {checks checks' : SettlementChecks} {state next after : LedgerState}
+    {token token' : SettlementToken} {delta delta' : Nat} {upheld upheld' : Bool}
+    (h : LedgerSettlement Γ checks state token delta upheld next)
+    (sameNonce : token'.nonce = token.nonce) :
+    ¬ LedgerSettlement Γ' checks' next token' delta' upheld' after := by
+  have sameToken : token' = token := by
+    cases token'
+    cases token
+    cases sameNonce
+    rfl
+  subst token'
+  exact settlement_cannot_replay h
+
 private def emptySettlement : Settlement := { settled := [], escrow := [], legalReserve := 0 }
 
 private def exampleSettlement : Settlement :=
@@ -194,6 +332,31 @@ example : ledgerBoundsHold { testLedger with escrow_bal := 2 } 3 = false := by d
 example : ledgerBoundsHold { testLedger with escrow_sum := 2 } 3 = false := by decide
 example : ledgerBoundsHold { testLedger with r_dist := 2 } 3 = false := by decide
 example : (toUInt64Ledger testLedger).map fromUInt64Ledger = some testLedger := by decide
+private def testLedger64 : EpochLedger64 :=
+  { r_gross := 10, r_legal := 1, r_infra := 2, r_dist := 7,
+    liquid_sum := 2, escrow_sum := 5, escrow_bal := 5 }
+
+example : (ledgerCandidate64 testLedger64 3 true).map fromUInt64Ledger =
+    ledgerCandidate testLedger 3 true := by decide
+example : (ledgerCandidate64 testLedger64 3 false).map fromUInt64Ledger =
+    ledgerCandidate testLedger 3 false := by decide
+example : ledgerCandidate64 testLedger64 6 true = none := by decide
+example : ledgerCandidate64 { testLedger64 with r_legal := UInt64.ofNat (2 ^ 64 - 1) }
+    3 true = none := by decide
+example : ledgerCandidate64 { testLedger64 with liquid_sum := UInt64.ofNat (2 ^ 64 - 1) }
+    3 false = none := by decide
+
+private def testChecks : SettlementChecks :=
+  { signature := fun _ _ _ _ => True, proof := fun _ _ _ _ => True,
+    authorization := fun _ _ _ _ => True }
+private def testState : LedgerState := { ledger := testLedger, spent := fun _ => False }
+private def testToken : SettlementToken := ⟨"nonce-1"⟩
+
+example : LedgerSettlement (fun _ => True) testChecks testState testToken 0 false
+    (consumeSettlement testState testToken testLedger) := by
+  apply valid_settlement_succeeds
+  exact ⟨trivial, fun h => h, trivial, trivial, trivial, by decide⟩
+
 example : toUInt64Ledger { testLedger with r_legal := 2 ^ 64 } = none := by decide
 example : toUInt64Ledger { testLedger with r_infra := 2 ^ 64 } = none := by decide
 example : toUInt64Ledger { testLedger with r_dist := 2 ^ 64 } = none := by decide

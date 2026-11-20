@@ -44,16 +44,18 @@ The existing [TAS[0X] specification](specs/tas_0x_agent.md) describes its own
 external authority, replay, and fail-closed effect boundaries; these must not
 be conflated with a modeled verification result.
 
-## Unresolved SMT anchor
+## SMT anchor
 
-The supplied suite defines `Z₀` as 32 zero bytes and recursively computes
+The specified L1–L4 wire anchor is the complete 32-byte value
+`6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b`;
+the earlier integer `61552891` is not a substitute for this commitment.
+Treat the full value as the configured anchor.
+
+Separately, the supplied recursion defines `Z₀` as 32 zero bytes and
 `Zₕ₊₁ = SHA-256(0x01 || Zₕ || Zₕ)`. After 256 iterations this yields
 `6155289130893872355eac98042d22aefa2c2e708bea169402760e3b55f9a2dc`.
-The separately supplied full root is
-`6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b`.
-Their common prefix does not make the commitments interchangeable. Until the
-protocol resolves the discrepancy, neither should be represented as a
-verified derivation of the other.
+Their common prefix does not make the commitments interchangeable: the
+configured anchor must not be represented as the result of that recursion.
 
 The supplied integer-only reference uses a length-based capability-index
 shortcut and trusted Boolean verification results. The requested wire protocol
