@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import threading
@@ -283,3 +284,58 @@ def test_persisted_gross_overflow_and_cvp_corruption_fail_closed(env):
         machine.release(message, signature)
     with sqlite3.connect(directory / "ledger.sqlite") as db:
         assert db.execute("SELECT COUNT(*) FROM qf_receipts").fetchone()[0] == 0
+
+
+def test_relative_path_survives_cwd_change(env, monkeypatch):
+    directory, key, public, _ = env
+    original = Path.cwd()
+    root = directory.resolve()
+    (root / "other").mkdir()
+    try:
+        monkeypatch.chdir(root)
+        machine = FinancialMachine("relative.sqlite", machine_id="machine-1", tribunal_key=public)
+        before = provision(machine)
+        monkeypatch.chdir(root / "other")
+        decoy = FinancialMachine("relative.sqlite", machine_id="machine-2", tribunal_key=public)
+        decoy_before = provision(decoy)
+        assert machine.state() == before
+        message = token()
+        assert machine.release(message, sign(key, message)).status == ReleaseStatus.RELEASED
+        assert decoy.state() == decoy_before
+        assert Path(machine.path) == root / "relative.sqlite"
+    finally:
+        monkeypatch.chdir(original)
+
+
+@pytest.mark.parametrize("changed", ["machine_id", "tribunal_key"])
+def test_replaced_database_fails_closed_in_each_transaction(env, changed):
+    directory, key, public, machine = env
+    provision(machine)
+    other_key = Ed25519PrivateKey.generate()
+    other_public = other_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    replacement_path = directory / "replacement.sqlite"
+    replacement = FinancialMachine(
+        replacement_path,
+        machine_id="machine-2" if changed == "machine_id" else "machine-1",
+        tribunal_key=other_public if changed == "tribunal_key" else public,
+    )
+    replacement_before = provision(replacement)
+    original_path = directory / "ledger.sqlite"
+    for path in (original_path, replacement_path):
+        with sqlite3.connect(path) as db:
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+    os.replace(replacement_path, original_path)
+    message = token()
+    for operation in (
+        lambda: machine.state(),
+        lambda: machine.provision([], cvp_allocations=CVP),
+        lambda: machine.release(message, sign(key, message)),
+    ):
+        with pytest.raises(ValueError, match="machine ID or trusted tribunal key mismatch"):
+            operation()
+    with sqlite3.connect(original_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM qf_receipts").fetchone()[0] == 0
+        assert db.execute("SELECT status FROM qf_allocations WHERE allocation_id='a'").fetchone() == ("escrow",)
+        assert db.execute("SELECT r_gross FROM qf_state").fetchone() == (str(replacement_before.r_gross),)

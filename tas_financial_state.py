@@ -179,12 +179,14 @@ class FinancialMachine:
     """
 
     def __init__(self, path: str | Path, *, machine_id: str, tribunal_key: bytes):
-        self.path = str(path)
-        if not self.path or self.path == ":memory:" or self.path.startswith("file:"):
+        raw_path = str(path)
+        if not raw_path or raw_path == ":memory:" or raw_path.startswith("file:"):
             raise ValueError("a persistent SQLite file path is required")
+        self.path = str(Path(raw_path).resolve())
         self.machine_id = _text(machine_id, "machine_id")
         if type(tribunal_key) is not bytes or len(tribunal_key) != 32:
             raise ValueError("trusted tribunal key must be 32 raw bytes")
+        self._tribunal_key = tribunal_key
         self.key = Ed25519PublicKey.from_public_bytes(tribunal_key)
         with closing(self._connect()) as db:
             if db.execute("PRAGMA journal_mode=WAL").fetchone()[0].lower() != "wal":
@@ -225,6 +227,13 @@ class FinancialMachine:
         db.execute("PRAGMA busy_timeout=30000")
         db.execute("PRAGMA synchronous=FULL")
         return db
+
+    def _check_config(self, db: sqlite3.Connection) -> None:
+        row = db.execute(
+            "SELECT machine_id, tribunal_key FROM qf_config WHERE singleton=1"
+        ).fetchone()
+        if row != (self.machine_id, self._tribunal_key):
+            raise ValueError("machine ID or trusted tribunal key mismatch")
 
     def provision(self, allocations: Sequence[EscrowAllocation], *,
                   cvp_allocations: Sequence[SettlementSlice],
@@ -267,6 +276,7 @@ class FinancialMachine:
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
             try:
+                self._check_config(db)
                 if db.execute("SELECT 1 FROM qf_state").fetchone():
                     raise ValueError("machine already provisioned")
                 db.execute("INSERT INTO qf_state VALUES (1, ?, ?, ?, ?, ?, ?, ?)",
@@ -338,6 +348,7 @@ class FinancialMachine:
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             try:
+                self._check_config(db)
                 state = self._state(db)
                 db.commit()
                 return state
@@ -358,6 +369,7 @@ class FinancialMachine:
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
             try:
+                self._check_config(db)
                 state = self._state(db)
                 cvp_hash = self._cvp_digest(db)
                 if db.execute("SELECT 1 FROM qf_receipts WHERE nonce=?", (token.nonce,)).fetchone():
