@@ -157,7 +157,7 @@ private def uint64Ledger (j : Json) : Except String String := do
     if fromUInt64Ledger value != ledger then throw s!"uint64_ledger {id}: round trip mismatch"
   return id
 
-private def runFamily (name : String) (value : Json) : Except String Nat := do
+private def runFamily (name : String) (value : Json) : Except String (List String) := do
   let runner ← match name with
     | "settlement" => pure settlement
     | "uint64_ledger" => pure uint64Ledger
@@ -165,18 +165,22 @@ private def runFamily (name : String) (value : Json) : Except String Nat := do
   let vectors ← value.getArr?
   if vectors.isEmpty then throw s!"empty family: {name}"
   let ids ← vectors.toList.mapM runner
-  if ids.eraseDups.length != ids.length then throw s!"duplicate vector id in {name}"
-  return ids.length
+  return ids
 
 private def run (data : Json) : Except String String := do
   fields data ["version", "families"]
   if (← (← field data "version").getStr?) != "0.7.0" then throw "invalid version"
   let families ← (← field data "families").getObj?
+  for name in ["settlement", "uint64_ledger"] do
+    if (families.find compare name).isNone then
+      throw s!"missing required family: {name}"
   let items := families.fold (fun acc name value => (name, value) :: acc) []
-  if items.isEmpty then throw "empty families"
-  let counts ← items.mapM fun (name, vectors) => do
-    let count ← runFamily name vectors
-    return s!"{name}={count}"
+  let results ← items.mapM fun (name, vectors) => do
+    let ids ← runFamily name vectors
+    return (ids, s!"{name}={ids.length}")
+  let ids := results.foldl (fun acc result => acc ++ result.1) []
+  if ids.eraseDups.length != ids.length then throw "duplicate vector id"
+  let counts := results.map (fun result => result.2)
   return "PASS arithmetic only: " ++ String.intercalate ", " counts
 
 end SISU.Conformance
@@ -197,7 +201,16 @@ private def runFile (path : String) : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 :=
   match args with
-  | [] => runFile "tas_vectors_v0_7_0.json"
+  | [] => do
+    try
+      let bin ← IO.appDir
+      let some build := bin.parent | throw (IO.userError "missing build directory")
+      let some lake := build.parent | throw (IO.userError "missing .lake directory")
+      let some root := lake.parent | throw (IO.userError "missing project directory")
+      runFile (root / "tas_vectors_v0_7_0.json").toString
+    catch e =>
+      IO.eprintln s!"FAIL: {e}"
+      return (1 : UInt32)
   | [path] => runFile path
   | _ => do
     IO.eprintln "FAIL: usage: runner [path]"

@@ -16,6 +16,8 @@ from sdf_admissibility_daemon import SQLiteDecisionLedger
 from tas_conformance_harness import (
     CAPABILITY_DOMAIN,
     CONFIGURED_SMT_ROOT,
+    Z_0_LEAF,
+    Z_256_ROOT,
     CapabilityEnvelope,
     EscrowLedger,
     EscrowRequest,
@@ -116,6 +118,8 @@ class CryptoTests(unittest.TestCase):
         ), 15))
 
     def test_anchor_is_configured_not_empty_tree_recursion(self):
+        self.assertEqual(Z_0_LEAF, "00" * 32)
+        self.assertEqual(Z_256_ROOT, CONFIGURED_SMT_ROOT)
         node = bytes(32)
         defaults = []
         for _ in range(256):
@@ -180,6 +184,26 @@ class CryptoTests(unittest.TestCase):
         self.assertIsNone(self.release(now=21))
         self.assertIsNone(self.release(replace(self.request, delta=51)))
         self.assertIsNone(self.release(replace(self.request, expected=replace(self.initial, escrow_bal=49))))
+        with self.ledger._connect() as con:
+            self.assertEqual(con.execute("SELECT count(*) FROM decision_receipts").fetchone()[0], 0)
+
+    def test_invalid_ledger_and_gross_overflow_refused(self):
+        invalid = (
+            replace(self.initial, r_legal=11),
+            replace(self.initial, liquid_sum=31),
+            replace(self.initial, escrow_bal=49),
+            EscrowLedger(2**64 // 1500 + 1, 0, 0, 2**64 // 1500 + 1,
+                         0, 2**64 // 1500 + 1, 2**64 // 1500 + 1),
+        )
+        for i, state in enumerate(invalid):
+            with self.subTest(state=state):
+                with self.assertRaises(ValueError):
+                    provision_escrow_ledger(self.ledger, f"invalid-{i}", state)
+                if state.r_gross <= 2**53 - 1:
+                    self.assertIsNone(self.release(replace(self.request, expected=state)))
+                else:
+                    self.assertIsNone(self.release(replace(self.request, expected=state),
+                                                   release_sig=b"\0" * 64))
         with self.ledger._connect() as con:
             self.assertEqual(con.execute("SELECT count(*) FROM decision_receipts").fetchone()[0], 0)
 

@@ -14,9 +14,14 @@ conformance kernel and does not establish cryptographic or 256-bit parity.
 
 namespace SISU.Reaction
 
-/-- A configured anchor, not a claim that any root was computed from a proof. -/
-def configuredAnchor : String :=
+/-- These constants are wire commitments, not a proof of empty-tree derivation. -/
+def Z_0_LEAF : String :=
+  "0000000000000000000000000000000000000000000000000000000000000000"
+
+def Z_256_ROOT : String :=
   "6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b"
+
+def configuredAnchor : String := Z_256_ROOT
 
 structure Share where
   artifactId : String

@@ -6,6 +6,7 @@ Unknown families and malformed vectors are errors, never skipped.
 """
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from tas_conformance_harness import SettlementSlice, calculate_batch_allocations
 
 
 LIMIT = 1 << 64
+ROOT = Path(__file__).resolve().parent
+DEFAULT_VECTORS = ROOT / "tas_vectors_v0_7_0.json"
 LEDGER_FIELDS = ("r_gross", "r_legal", "r_infra", "r_dist", "liquid_sum",
                  "escrow_sum", "escrow_bal")
 
@@ -105,27 +108,35 @@ def unique_object(pairs):
 def main():
     if len(sys.argv) > 2:
         raise ValueError("usage: run_vectors.py [path]")
-    path = Path(sys.argv[1]) if len(sys.argv) == 2 else Path("tas_vectors_v0_7_0.json")
+    path = (Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_VECTORS).resolve()
     with path.open(encoding="utf-8") as source:
         data = json.load(source, object_pairs_hook=unique_object,
                          parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
     object_fields(data, ("version", "families"))
-    if data["version"] != "0.7.0" or not isinstance(data["families"], dict) or not data["families"]:
-        raise ValueError("invalid version or empty families")
+    if data["version"] != "0.7.0" or not isinstance(data["families"], dict):
+        raise ValueError("invalid version or families")
     runners = {"settlement": settlement, "uint64_ledger": uint64_ledger}
+    missing = runners.keys() - data["families"].keys()
+    if missing:
+        raise ValueError(f"missing required families: {', '.join(sorted(missing))}")
     counts = []
+    ids = set()
     for family, vectors in data["families"].items():
         if family not in runners:
             raise ValueError(f"unsupported family: {family}")
         if not isinstance(vectors, list) or not vectors:
             raise ValueError(f"empty or invalid family: {family}")
-        ids = set()
         for vector in vectors:
             runners[family](vector)
             if vector["id"] in ids:
-                raise ValueError(f"duplicate vector id in {family}: {vector['id']}")
+                raise ValueError(f"duplicate vector id: {vector['id']}")
             ids.add(vector["id"])
         counts.append(f"{family}={len(vectors)}")
+    result = subprocess.run(
+        ["lake", "exe", "conformance", str(path)], cwd=ROOT, check=False
+    )
+    if result.returncode:
+        raise ValueError(f"Lean conformance runner failed with exit code {result.returncode}")
     print("PASS arithmetic only: " + ", ".join(counts))
 
 

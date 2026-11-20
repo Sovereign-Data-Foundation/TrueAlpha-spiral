@@ -32,7 +32,9 @@ _MAX_SAFE_JSON_INT = (1 << 53) - 1
 _RECEIPT_DOMAIN = b"TAS\x00ADMISSIBILITY-RECEIPT\x00v1\x00"
 CAPABILITY_DOMAIN = b"TAS\x00CAPABILITY\x00v1\x00"
 ESCROW_DOMAIN = b"TAS\x00ESCROW-RELEASE\x00v1\x00"
-CONFIGURED_SMT_ROOT = "6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b"
+Z_0_LEAF = "00" * 32
+Z_256_ROOT = "6155289196324fe02ff3e7bd5b8423237ebcfa686f0bb6c8fc8812c75a40974b"
+CONFIGURED_SMT_ROOT = Z_256_ROOT
 
 
 @dataclass(frozen=True)
@@ -282,7 +284,7 @@ def _verify_non_inclusion(index: str, proof: SparseNonInclusionProof, root: str)
     if len(proof.siblings) != 256:
         raise ValueError("sparse proof must have 256 siblings")
     path = int.from_bytes(_hex_hash(index), "big")
-    node = bytes(32)
+    node = bytes.fromhex(Z_0_LEAF)
     for level, sibling_hex in enumerate(proof.siblings):
         sibling = _hex_hash(sibling_hex)
         left, right = (sibling, node) if (path >> level) & 1 else (node, sibling)
@@ -320,6 +322,17 @@ def _ledger_body(ledger: EscrowLedger) -> dict[str, int]:
     return body
 
 
+def _validate_ledger_invariants(ledger: EscrowLedger) -> None:
+    _ledger_body(ledger)
+    if ledger.r_gross * 1500 > _MAX_U64:
+        raise ValueError("gross product exceeds UInt64")
+    if ledger.r_legal + ledger.r_infra + ledger.r_dist != ledger.r_gross:
+        raise ValueError("statutory conservation violated")
+    if (ledger.liquid_sum + ledger.escrow_sum != ledger.r_dist
+            or ledger.escrow_bal != ledger.escrow_sum):
+        raise ValueError("distribution conservation violated")
+
+
 def _release_body(request: EscrowRequest, cap: CapabilityEnvelope,
                   trusted: TrustedGate) -> dict[str, Any]:
     if type(request) is not EscrowRequest:
@@ -351,6 +364,7 @@ def provision_escrow_ledger(ledger: SQLiteDecisionLedger, ledger_id: str,
     if type(ledger) is not SQLiteDecisionLedger:
         raise TypeError("SQLiteDecisionLedger required")
     _nonempty_text(ledger_id, "ledger_id")
+    _validate_ledger_invariants(initial)
     payload = deterministic_jcs_serialize(_ledger_body(initial)).decode("utf-8")
     with closing(ledger._connect()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
@@ -378,6 +392,7 @@ def release_escrow(request: EscrowRequest, cap: CapabilityEnvelope,
         body = _release_body(request, cap, trusted)
         _verify_signature(trusted.adjudicator_key, release_signature, ESCROW_DOMAIN, body)
         state = request.expected
+        _validate_ledger_invariants(state)
         delta = request.delta
         if delta > min(state.escrow_bal, state.escrow_sum, state.r_dist):
             return None
@@ -390,6 +405,7 @@ def release_escrow(request: EscrowRequest, cap: CapabilityEnvelope,
         else:
             fields["liquid_sum"] += delta
         result = EscrowLedger(**fields)
+        _validate_ledger_invariants(result)
         next_payload = deterministic_jcs_serialize(_ledger_body(result)).decode("utf-8")
         expected_payload = deterministic_jcs_serialize(body["expected"]).decode("utf-8")
         receipt = {"type": "tas-escrow-release-v1", "request": body,

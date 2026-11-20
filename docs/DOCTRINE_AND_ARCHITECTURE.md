@@ -71,6 +71,18 @@ authenticated key and canonical signing payload, rather than accepting a
 caller-supplied signature-valid flag. A spent nonce must be rejected before
 admission and consumed atomically with a successful state transition. The
 execution receipt must bind the SHA-256 digest of the JCS-canonicalized
-normalized allocation vector. These requirements are not evidence that the
-cryptographic verifier, durable atomic commit, or cross-language receipt
-validation has been implemented.
+normalized allocation vector.
+
+The Python epoch-evidence evaluator in `tas_epoch_admission.py` checks an
+Ed25519 signature and reconstructs a sparse proof against independently
+configured trust. It does not authenticate the capability or establish
+replay-safe commitment. The existing SQLite escrow ledger atomically commits
+its own internal ledger and nonce; it does not authorize an external transfer.
+The dual-lattice merge in `tas_phi_merge.py` needs an independently configured
+verifier for discharge proofs. These components are not yet integrated into
+one admission and settlement transition.
+
+`run_vectors.py` and the Lean runner currently verify **arithmetic only**;
+they do not check cross-language cryptographic gate, escrow or merge parity.
+The configured anchor remains distinct from the recursion-derived empty root.
+Passing these checks does not establish full protocol conformance.
